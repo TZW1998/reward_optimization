@@ -13,11 +13,11 @@ from diffusers import StableDiffusionPipeline, DDIMScheduler, UNet2DConditionMod
 from diffusers.loaders import AttnProcsLayers
 from diffusers.models.attention_processor import LoRAAttnProcessor
 import numpy as np
-import ddpo_pytorch.prompts
-import ddpo_pytorch.rewards
-from ddpo_pytorch.stat_tracking import PerPromptStatTracker
-from ddpo_pytorch.diffusers_patch.pipeline_with_logprob import pipeline_with_logprob
-from ddpo_pytorch.diffusers_patch.ddim_with_logprob import ddim_step_with_logprob
+import reward_opt.prompts
+import reward_opt.rewards
+from reward_opt.stat_tracking import PerPromptStatTracker
+from reward_opt.diffusers_patch.pipeline_with_logprob import pipeline_with_logprob
+from reward_opt.diffusers_patch.ddim_with_logprob import ddim_step_with_logprob
 import torch
 import wandb
 from functools import partial
@@ -76,7 +76,7 @@ def main(_):
     )
     if accelerator.is_main_process:
         accelerator.init_trackers(
-            project_name="ddpo-pytorch", config=config.to_dict(), init_kwargs={"wandb": {"name": config.run_name}}
+            project_name="reward_opt-pytorch", config=config.to_dict(), init_kwargs={"wandb": {"name": config.run_name}}
         )
     logger.info(f"\n{config}")
 
@@ -207,8 +207,8 @@ def main(_):
     )
 
     # prepare prompt and reward fn
-    prompt_fn = getattr(ddpo_pytorch.prompts, config.prompt_fn)
-    reward_fn = getattr(ddpo_pytorch.rewards, config.reward_fn)()
+    prompt_fn = getattr(reward_opt.prompts, config.prompt_fn)
+    reward_fn = getattr(reward_opt.rewards, config.reward_fn)()
 
     # generate negative prompt embeddings
     neg_prompt_embed = pipeline.text_encoder(

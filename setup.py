@@ -1,9 +1,9 @@
 from setuptools import setup, find_packages
 
 setup(
-    name="ddpo-pytorch",
+    name="reward_opt",
     version="0.0.1",
-    packages=["ddpo_pytorch"],
+    packages=["reward_opt"],
     python_requires=">=3.10",
     install_requires=[
         "ml-collections",
