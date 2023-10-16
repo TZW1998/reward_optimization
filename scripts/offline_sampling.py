@@ -71,11 +71,6 @@ def main(_):
     # prepare output dir
     os.makedirs(args.output_dir, exist_ok=True)
 
-    @accelerator.on_main_process
-    def save_images_reward():
-        all_images = accelerator.gather(images).cpu().numpy()
-        print("saving images and rewards")
-
     # start sampling
     for round in tqdm.trange(total_rounds):
         # generate prompts
@@ -108,9 +103,7 @@ def main(_):
         rewards = reward_fn(images, prompts, prompt_metadata)
 
         # collect samples
-        accelerator.wait_for_everyone()
-        save_images_reward()
-        accelerator.wait_for_everyone()
+        print("rewards", rewards)
 
 if __name__ == "__main__":
     app.run(main)
