@@ -111,8 +111,9 @@ def main(_):
                         "rewards": rewards,
                     })
 
-        all_images = accelerator.gather(images)
-        print(accelerator.process_index, round, images.shape, all_images.shape, accelerator.is_local_main_process, accelerator.is_main_process)
+        if accelerator.is_local_main_process:
+            all_images = accelerator.gather(images)
+            print(accelerator.process_index, round, images.shape, all_images.shape, accelerator.is_local_main_process, accelerator.is_main_process)
 
 if __name__ == "__main__":
     app.run(main)
