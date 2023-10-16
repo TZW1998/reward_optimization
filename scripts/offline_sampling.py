@@ -26,8 +26,7 @@ import tempfile
 from PIL import Image
 from argparse import ArgumentParser
 
-def main(_):
-
+def main():
     args = ArgumentParser()
     args.add_argument("--num_samples", type=int, default=10)
     args.add_argument("--batch_size_per_device", type=int, default=1)
@@ -70,6 +69,13 @@ def main(_):
 
     # prepare output dir
     os.makedirs(args.output_dir, exist_ok=True)
+
+    # print info, including, prompt_fn, reward_fn total numsamples, numbers of gpu, total rounds
+    print(f"Prompt function: {args.prompt_fn}")
+    print(f"Reward function: {args.reward_fn}")
+    print(f"Total number of samples: {args.num_samples}")
+    print(f"Number of GPUs: {accelerator.num_processes}")
+    print(f"Total rounds: {total_rounds}")
 
     # start sampling
     for round in tqdm.trange(total_rounds):
