@@ -67,8 +67,13 @@ def main():
 
     total_rounds = args.num_samples // (args.batch_size_per_device * accelerator.num_processes)
 
-    # prepare output dir
-    os.makedirs(args.output_dir, exist_ok=True)
+    # prepare output dir, if it exists, delete it
+    if accelerator.is_local_main_process:
+        if os.path.exists(args.output_dir):
+            import shutil
+
+            shutil.rmtree(args.output_dir)
+        os.makedirs(args.output_dir, exist_ok=True)
 
     # print info, including, prompt_fn, reward_fn total numsamples, numbers of gpu, total rounds
     if accelerator.is_local_main_process:
