@@ -108,6 +108,7 @@ def main(_):
         rewards = reward_fn(images, prompts, prompt_metadata)
 
         # collect samples
+        accelerator.wait_for_everyone()
         save_images_reward()
         accelerator.wait_for_everyone()
 
