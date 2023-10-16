@@ -29,7 +29,7 @@ from argparse import ArgumentParser
 def main(_):
 
     args = ArgumentParser()
-    args.add_argument("--num_samples", type=int, default=25600)
+    args.add_argument("--num_samples", type=int, default=10)
     args.add_argument("--batch_size_per_device", type=int, default=1)
     args.add_argument("--model", type=str, default="/home/zhiweitang/sdv1-5-full-diffuser")
     args.add_argument("--prompt_fn", type=str, default="simple_animals")
