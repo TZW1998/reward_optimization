@@ -109,6 +109,7 @@ def main(_):
 
         # collect samples
         save_images_reward()
+        accelerator.wait_for_everyone()
 
 if __name__ == "__main__":
     app.run(main)
