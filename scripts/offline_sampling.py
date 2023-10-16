@@ -73,7 +73,7 @@ os.makedirs(args.output_dir, exist_ok=True)
 for round in tqdm.trange(total_rounds):
     # generate prompts
     prompts, prompt_metadata = zip(
-        *[prompt_fn({}) for _ in range(args.batch_size_per_device)]
+        *[prompt_fn() for _ in range(args.batch_size_per_device)]
     )
 
     # encode prompts
