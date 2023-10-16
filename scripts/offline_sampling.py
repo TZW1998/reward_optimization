@@ -100,10 +100,20 @@ def main(_):
                 output_type="pt",
             )
 
-        rewards = reward_fn(images, prompts, prompt_metadata)
+        rewards = reward_fn(images, prompts, prompt_metadata)[0]
 
-        # collect samples
-        print("rewards", rewards)
+        # save images with rewards and prompts in file name
+        for i, (image, reward, prompt) in enumerate(zip(images, rewards, prompts)):
+            image = image.cpu().numpy().transpose(1, 2, 0)
+            image = (image * 255).astype(np.uint8)
+            image = Image.fromarray(image)
+            image.save(
+                os.path.join(
+                    args.output_dir,
+                    f"ID_{round}-{accelerator.process_index}-{i}_reward_{reward:.3f}_prompt_{prompt}.png",
+                )
+            )
+        
 
 if __name__ == "__main__":
     app.run(main)
