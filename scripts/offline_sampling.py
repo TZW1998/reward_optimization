@@ -69,6 +69,7 @@ total_rounds = args.num_samples // (args.batch_size_per_device * accelerator.num
 # prepare output dir
 os.makedirs(args.output_dir, exist_ok=True)
 
+samples = []
 # start sampling
 for round in tqdm.trange(total_rounds):
     # generate prompts
@@ -100,5 +101,13 @@ for round in tqdm.trange(total_rounds):
 
     rewards = reward_fn(images, prompts, prompt_metadata)
 
-import ipdb; ipdb.set_trace()
+    # collect samples
+    samples.append({
+                    "prompt_ids": prompt_ids,
+                    "prompt_embeds": prompt_embeds,
+                    "images": images,
+                    "rewards": rewards,
+                })
 
+
+import ipdb; ipdb.set_trace()
