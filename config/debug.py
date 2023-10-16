@@ -35,8 +35,8 @@ def get_config():
     ###### Pretrained Model ######
     config.pretrained = pretrained = ml_collections.ConfigDict()
     # base model to load. either a path to a local directory, or a model name from the HuggingFace model hub.
-    #pretrained.model = "/home/zhiwei/research_dev/diffusion_codebase/backbone_models/sdv1-5-full-diffuser"
-    pretrained.model = "/home/zhiweitang/sdv1-5-full-diffuser"
+    pretrained.model = "/home/zhiwei/research_dev/diffusion_codebase/backbone_models/sdv1-5-full-diffuser"
+    #pretrained.model = "/home/zhiweitang/sdv1-5-full-diffuser"
     # revision of the model to load.
     pretrained.revision = "main"
 
@@ -50,15 +50,15 @@ def get_config():
     # classifier-free guidance weight. 1.0 is no guidance.
     sample.guidance_scale = 5.0
     # batch size (per GPU!) to use for sampling.
-    sample.batch_size = 16
+    sample.batch_size = 1
     # number of batches to sample per epoch. the total number of samples per epoch is `num_batches_per_epoch *
     # batch_size * num_gpus`.
-    sample.num_batches_per_epoch = 16
+    sample.num_batches_per_epoch = 2
 
     ###### Training ######
     config.train = train = ml_collections.ConfigDict()
     # batch size (per GPU!) to use for training.
-    train.batch_size = 2
+    train.batch_size = 1
     # whether to use the 8bit Adam optimizer from bitsandbytes.
     train.use_8bit_adam = False
     # learning rate.
@@ -73,7 +73,7 @@ def get_config():
     train.adam_epsilon = 1e-8
     # number of gradient accumulation steps. the effective batch size is `batch_size * num_gpus *
     # gradient_accumulation_steps`.
-    train.gradient_accumulation_steps = 32
+    train.gradient_accumulation_steps = 1
     # maximum gradient norm for gradient clipping.
     train.max_grad_norm = 1.0
     # number of inner epochs per outer epoch. each inner epoch is one iteration through the data collected during one

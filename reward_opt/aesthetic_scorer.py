@@ -7,8 +7,9 @@ import numpy as np
 from transformers import CLIPModel, CLIPProcessor
 from PIL import Image
 
-ASSETS_PATH = resources.files("ddpo_pytorch.assets")
-
+ASSETS_PATH = resources.files("reward_opt.assets")
+MODEL_PATH = "/home/zhiweitang/clip-vit-large-patch14"
+# MODEL_PATH = "/home/zhiwei/research_dev/clip-vit-large-patch14"
 
 class MLP(nn.Module):
     def __init__(self):
@@ -32,8 +33,8 @@ class MLP(nn.Module):
 class AestheticScorer(torch.nn.Module):
     def __init__(self, dtype):
         super().__init__()
-        self.clip = CLIPModel.from_pretrained("openai/clip-vit-large-patch14")
-        self.processor = CLIPProcessor.from_pretrained("openai/clip-vit-large-patch14")
+        self.clip = CLIPModel.from_pretrained(MODEL_PATH)
+        self.processor = CLIPProcessor.from_pretrained(MODEL_PATH)
         self.mlp = MLP()
         state_dict = torch.load(ASSETS_PATH.joinpath("sac+logos+ava1-l14-linearMSE.pth"))
         self.mlp.load_state_dict(state_dict)
