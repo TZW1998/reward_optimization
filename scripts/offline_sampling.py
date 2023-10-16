@@ -109,5 +109,6 @@ for round in tqdm.trange(total_rounds):
                     "rewards": rewards,
                 })
 
-    all_images = accelerator.gather(images)
-    print(accelerator.process_index, round, all_images.shape)
+    if accelerator.is_local_main_process:
+        all_images = accelerator.gather(images)
+        print(accelerator.process_index, round, all_images.shape)
