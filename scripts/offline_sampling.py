@@ -64,7 +64,7 @@ sample_neg_prompt_embeds = neg_prompt_embed.repeat(args.batch_size_per_device, 1
 
 executor = futures.ThreadPoolExecutor(max_workers=2)
 
-total_rounds = args.num_samples // (args.batch_size_per_device_per_device * accelerator.num_processes)
+total_rounds = args.num_samples // (args.batch_size_per_device * accelerator.num_processes)
 
 # prepare output dir
 os.makedirs(args.output_dir, exist_ok=True)
