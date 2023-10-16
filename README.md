@@ -12,6 +12,7 @@ accelerate launch --num_processes=2  scripts/ddpo.py --config config/ddpo.py:aes
 ## Running AlignProp
 
 ## Gathering dataset for offline algorithms
+accelerate launch --num_processes=2 scripts/offline_sampling.py --num_samples 25600 --batch_size_per_device 32 &
 
 ## Running RWR
 

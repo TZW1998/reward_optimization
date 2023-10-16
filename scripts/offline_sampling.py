@@ -84,7 +84,8 @@ def main():
         print(f"Total rounds: {total_rounds}")
 
     # start sampling
-    for round in tqdm.trange(total_rounds):
+    for round in tqdm.trange(total_rounds, desc="generation round",
+            disable=not accelerator.is_local_main_process):
         # generate prompts
         prompts, prompt_metadata = zip(
             *[prompt_fn() for _ in range(args.batch_size_per_device)]
