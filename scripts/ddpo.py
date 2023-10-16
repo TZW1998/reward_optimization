@@ -29,7 +29,7 @@ tqdm = partial(tqdm.tqdm, dynamic_ncols=True)
 
 
 FLAGS = flags.FLAGS
-config_flags.DEFINE_config_file("config", "config/base.py", "Training configuration.")
+config_flags.DEFINE_config_file("config", "config/ddpo.py", "Training configuration.")
 
 logger = get_logger(__name__)
 
