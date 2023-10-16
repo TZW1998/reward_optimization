@@ -111,4 +111,4 @@ for round in tqdm.trange(total_rounds):
 
     if accelerator.is_main_process:
         all_images = accelerator.gather(images)
-        import ipdb; ipdb.set_trace()
+        print("all_images", all_images.shape)
