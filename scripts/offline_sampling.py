@@ -109,5 +109,6 @@ for round in tqdm.trange(total_rounds):
                     "rewards": rewards,
                 })
 
-
-import ipdb; ipdb.set_trace()
+    if accelerator.is_main_process:
+        all_images = accelerator.gather(images)
+        import ipdb; ipdb.set_trace()
