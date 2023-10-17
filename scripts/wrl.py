@@ -15,7 +15,7 @@ from diffusers.models.attention_processor import LoRAAttnProcessor
 import numpy as np
 import reward_opt.prompts
 import reward_opt.rewards
-import reward_opt.datasets
+from reward_opt.datasets import ImageRewardDataset
 from reward_opt.stat_tracking import PerPromptStatTracker
 from reward_opt.diffusers_patch.pipeline_with_logprob import pipeline_with_logprob
 from reward_opt.diffusers_patch.ddim_with_logprob import ddim_step_with_logprob
@@ -238,7 +238,7 @@ def main(_):
         rewards = torch.stack([example["rewards"] for example in examples])
         return {"pixel_values": pixel_values, "input_ids": input_ids, "rewards": rewards}
 
-    offline_dataset = getattr(reward_opt.datasets, config.dataset)()
+    offline_dataset = ImageRewardDataset(config.dataset, pipeline.tokenizer)
 
     offline_dataloader = torch.utils.data.DataLoader(offline_dataset,
                                                         shuffle=True,
