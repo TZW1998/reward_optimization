@@ -8,7 +8,7 @@ def base():
 
     ###### General ######
     # run name for wandb logging and checkpoint saving -- if not provided, will be auto-generated based on the datetime.
-    config.run_name = "ddpo"
+    config.run_name = "weighted_reward_loss"
     # random seed for reproducibility.
     config.seed = 42
     # top-level logging directory for checkpoint saving.
@@ -42,7 +42,7 @@ def base():
     # revision of the model to load.
     pretrained.revision = "main"
 
-    ###### Sampling ######
+    ###### Sampling (Notice that this samples are only used for evaluation, unlike online algorithm) ######
     config.sample = sample = ml_collections.ConfigDict()
     # number of sampler inference steps.
     sample.num_steps = 50
@@ -57,8 +57,14 @@ def base():
     # batch_size * num_gpus`.
     sample.num_batches_per_epoch = 16
 
+    ###### offline dataset ######
+    config.dataset = "simple_animals_aesthetic_datasets"
+
     ###### Training ######
     config.train = train = ml_collections.ConfigDict()
+    # should tune num_steps_per_epoch, batch_size, gradient_accumulation_steps so that each epoch consume roungly the same with ddpo.
+    # number of gradient steps per epoch. This means that at each epoch, it will load num_steps * batch_size * num_gpu * gradient_accumulation_steps samples
+    train.num_steps_per_epoch = 4 
     # batch size (per GPU!) to use for training.
     train.batch_size = 2
     # whether to use the 8bit Adam optimizer from bitsandbytes.
@@ -78,40 +84,23 @@ def base():
     train.gradient_accumulation_steps = 16
     # maximum gradient norm for gradient clipping.
     train.max_grad_norm = 1.0
-    # number of inner epochs per outer epoch. each inner epoch is one iteration through the data collected during one
-    # outer epoch's round of sampling.
+    # number of inner epochs per outer epoch. each inner epoch is one iteration through the current subset of offline datasets
     train.num_inner_epochs = 1
     # whether or not to use classifier-free guidance during training. if enabled, the same guidance scale used during
     # sampling will be used during training.
     train.cfg = True
-    # clip advantages to the range [-adv_clip_max, adv_clip_max].
-    train.adv_clip_max = 5
-    # the PPO clip range.
-    train.clip_range = 1e-4
-    # the fraction of timesteps to train on. if set to less than 1.0, the model will be trained on a subset of the
-    # timesteps for each sample. this will speed up training but reduce the accuracy of policy gradient estimates.
-    train.timestep_fraction = 1.0
+    # the temperature used for reward-weighted loss
+    train.temperature = 1.0
 
-    ###### Prompt Function ######
+    ###### Prompt Function (only for evaluate) ######
     # prompt function to use. see `prompts.py` for available prompt functions.
     config.prompt_fn = "simple_animals"
     # kwargs to pass to the prompt function.
     config.prompt_fn_kwargs = {}
 
-    ###### Reward Function ######
+    ###### Reward Function (only for evaluate) ######
     # reward function to use. see `rewards.py` for available reward functions.
     config.reward_fn = "aesthetic_score"
-
-    ###### Per-Prompt Stat Tracking ######
-    # when enabled, the model will track the mean and std of reward on a per-prompt basis and use that to compute
-    # advantages. set `config.per_prompt_stat_tracking` to None to disable per-prompt stat tracking, in which case
-    # advantages will be calculated using the mean and std of the entire batch.
-    config.per_prompt_stat_tracking = ml_collections.ConfigDict()
-    # number of reward values to store in the buffer for each prompt. the buffer persists across epochs.
-    config.per_prompt_stat_tracking.buffer_size = 16
-    # the minimum number of reward values to store in the buffer before using the per-prompt mean and std. if the buffer
-    # contains fewer than `min_count` values, the mean and std of the entire batch will be used instead.
-    config.per_prompt_stat_tracking.min_count = 16
 
     return config
 
