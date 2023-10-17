@@ -223,13 +223,6 @@ def main(_):
     sample_neg_prompt_embeds = neg_prompt_embed.repeat(config.sample.batch_size, 1, 1)
     train_neg_prompt_embeds = neg_prompt_embed.repeat(config.train.batch_size, 1, 1)
 
-    # initialize stat tracker
-    if config.per_prompt_stat_tracking:
-        stat_tracker = PerPromptStatTracker(
-            config.per_prompt_stat_tracking.buffer_size,
-            config.per_prompt_stat_tracking.min_count,
-        )
-
     # for some reason, autocast is necessary for non-lora training but for lora training it isn't necessary and it uses
     # more memory
     autocast = contextlib.nullcontext if config.use_lora else accelerator.autocast
