@@ -56,9 +56,6 @@ def main(_):
                 sorted(checkpoints, key=lambda x: int(x.split("_")[-1]))[-1],
             )
 
-    # number of timesteps within each trajectory to train on
-    num_train_timesteps = int(config.sample.num_steps * config.train.timestep_fraction)
-
     accelerator_config = ProjectConfiguration(
         project_dir=os.path.join(config.logdir, config.run_name),
         automatic_checkpoint_naming=True,
@@ -72,7 +69,7 @@ def main(_):
         # we always accumulate gradients across timesteps; we want config.train.gradient_accumulation_steps to be the
         # number of *samples* we accumulate across, so we need to multiply by the number of training timesteps to get
         # the total number of optimizer steps to accumulate across.
-        gradient_accumulation_steps=config.train.gradient_accumulation_steps * num_train_timesteps,
+        gradient_accumulation_steps=config.train.gradient_accumulation_steps,
     )
     if accelerator.is_main_process:
         accelerator.init_trackers(
