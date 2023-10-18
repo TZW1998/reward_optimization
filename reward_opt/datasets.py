@@ -4,13 +4,16 @@ import numpy as np
 from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms, utils
 from PIL import Image
+from importlib import resources
 
+ASSETS_PATH = resources.files("reward_opt.assets")
 
 # A customize dataset class for loading offline training data from a given folder of dataset
 class ImageRewardDataset(Dataset):
     """dataset for (image, prompt, reward) triplets."""
 
-    def __init__(self, image_folder, tokenizer):
+    def __init__(self, dataset_name, tokenizer):
+        image_folder = ASSETS_PATH.joinpath(dataset_name + ".txt")
         images_name_list = os.listdir(image_folder)
         self.prompts_list = [name.strip(".png").split("_")[-1] for name in images_name_list]
         self.rewards_list = [float(name.strip(".png").split("_"))[2] for name in images_name_list]
