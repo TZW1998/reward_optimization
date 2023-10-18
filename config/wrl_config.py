@@ -70,7 +70,7 @@ def base():
     # whether to use the 8bit Adam optimizer from bitsandbytes.
     train.use_8bit_adam = False
     # learning rate.
-    train.learning_rate = 3e-4
+    train.learning_rate = 1e-4
     # Adam beta1.
     train.adam_beta1 = 0.9
     # Adam beta2.
@@ -90,7 +90,7 @@ def base():
     # sampling will be used during training.
     train.cfg = True
     # the temperature used for reward-weighted loss
-    train.temperature = 1.0
+    train.temperature = 0.1
 
     ###### Prompt Function (only for evaluate) ######
     # prompt function to use. see `prompts.py` for available prompt functions.
