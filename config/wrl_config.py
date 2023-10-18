@@ -52,10 +52,10 @@ def base():
     # classifier-free guidance weight. 1.0 is no guidance.
     sample.guidance_scale = 5.0
     # batch size (per GPU!) to use for sampling.
-    sample.batch_size = 1
+    sample.batch_size = 8
     # number of batches to sample per epoch. the total number of samples per epoch is `num_batches_per_epoch *
     # batch_size * num_gpus`.
-    sample.num_batches_per_epoch = 1
+    sample.num_batches_per_epoch = 16
 
     ###### offline dataset ######
     config.dataset = "simple_animals_aesthetic_datasets"
@@ -64,7 +64,7 @@ def base():
     config.train = train = ml_collections.ConfigDict()
     # should tune num_steps_per_epoch, batch_size, gradient_accumulation_steps so that each epoch consume roungly the same with ddpo.
     # number of gradient steps per epoch. This means that at each epoch, it will load num_steps * batch_size * num_gpu * gradient_accumulation_steps samples
-    train.num_steps_per_epoch = 100 
+    train.num_steps_per_epoch = 85 
     # batch size (per GPU!) to use for training.
     train.batch_size = 2
     # whether to use the 8bit Adam optimizer from bitsandbytes.
