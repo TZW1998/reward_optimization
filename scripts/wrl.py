@@ -419,7 +419,7 @@ def main(_):
         pipeline.unet.train()
         info = defaultdict(list)
         total_backpropogation_steps = config.train.num_steps_per_epoch * config.train.gradient_accumulation_steps
-        for i, step in tqdm(range(total_backpropogation_steps),
+        for step in tqdm(range(total_backpropogation_steps),
             desc=f"Epoch {epoch}: training",
             position=0,
             disable=not accelerator.is_local_main_process,
