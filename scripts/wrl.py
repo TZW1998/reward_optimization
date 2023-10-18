@@ -398,15 +398,15 @@ def main(_):
 
 
             # Predict the noise residual and compute loss
-            print("noisy_latents.shape: ", noisy_latents.shape, "timesteps.shape: ", timesteps.shape, "embeds.shape: ", embeds.shape)
             with autocast():
-                model_pred = unet(noisy_latents, timesteps, embeds).sample
-
-            if config.train.cfg:
-                model_pred_uncond, model_pred_text = model_pred.chunk(2)
-                model_pred = model_pred_uncond + config.sample.guidance_scale * (
-                    model_pred_text - model_pred_uncond
-                )
+                if config.train.cfg:
+                    model_pred = unet(torch.cat([noisy_latents]*2), torch.cat([timesteps]*2), embeds).sample
+                    model_pred_uncond, model_pred_text = model_pred.chunk(2)
+                    model_pred = model_pred_uncond + config.sample.guidance_scale * (
+                        model_pred_text - model_pred_uncond
+                    )
+                else:
+                    model_pred = unet(noisy_latents, timesteps, embeds).sample
 
             batch_rewards = batch["reward"].to(accelerator.device, dtype=inference_dtype)
             reward_weights = torch.exp(batch_rewards / config.train.temperature)
