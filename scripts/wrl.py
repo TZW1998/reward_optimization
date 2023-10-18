@@ -234,11 +234,11 @@ def main(_):
     def collate_fn(examples):
         pixel_values = torch.stack([example["pixel_values"] for example in examples])
         pixel_values = pixel_values.to(memory_format=torch.contiguous_format).float()
-        input_ids = torch.stack([example["input_ids"] for example in examples])
+        input_ids = torch.stack([example["input_ids"][0] for example in examples])
         
         rewards = torch.stack([example["rewards"] for example in examples])
 
-        print(input_ids.shape, rewards.shape, examples[0]["input_ids"].shape)
+        print(pixel_values.shape, input_ids.shape, rewards.shape, examples[0]["input_ids"].shape)
         return {"pixel_values": pixel_values, "input_ids": input_ids, "rewards": rewards}
 
     offline_dataset = ImageRewardDataset(config.dataset, pipeline.tokenizer)
