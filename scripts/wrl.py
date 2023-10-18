@@ -409,8 +409,8 @@ def main(_):
             reward_weights = torch.softmax(batch_rewards / config.train.temperature, dim = 0)
 
             loss = F.mse_loss(model_pred.float(), noise.float(), reduction="none")
-            loss = loss.sum(dim=list(range(1, len(loss.shape)))) * reward_weights
-            weighted_loss = loss.mean()
+            loss = loss.mean(dim=list(range(1, len(loss.shape)))) * reward_weights
+            weighted_loss = loss.sum()
             
             return weighted_loss
         

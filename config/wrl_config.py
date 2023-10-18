@@ -70,7 +70,7 @@ def base():
     # whether to use the 8bit Adam optimizer from bitsandbytes.
     train.use_8bit_adam = False
     # learning rate.
-    train.learning_rate = 1e-4
+    train.learning_rate = 2e-4
     # Adam beta1.
     train.adam_beta1 = 0.9
     # Adam beta2.
