@@ -278,7 +278,6 @@ def main(_):
     else:
         first_epoch = 0
 
-    global_step = 0
     for epoch in range(first_epoch, config.num_epochs):
         #################### SAMPLING (only for evaluate) ####################
         pipeline.unet.eval()
@@ -354,7 +353,7 @@ def main(_):
                         for i, (prompt, reward) in enumerate(zip(prompts, rewards))  # only log rewards from process 0
                     ],
                 },
-                step=global_step,
+                step=epoch,
             )
 
         # gather rewards across processes
@@ -363,7 +362,7 @@ def main(_):
         # log rewards and images
         accelerator.log(
             {"reward": rewards, "epoch": epoch, "reward_mean": rewards.mean(), "reward_std": rewards.std()},
-            step=global_step,
+            step=epoch,
         )
 
 
@@ -452,8 +451,6 @@ def main(_):
                 info = {k: torch.mean(torch.stack(v)) for k, v in info.items()}
                 info = accelerator.reduce(info, reduction="mean")
                 info.update({"epoch": epoch, "step": step})
-                accelerator.log(info, step=global_step)
-                global_step += 1
                 info = defaultdict(list)
 
         # make sure we did an optimization step at the end of the inner epoch
