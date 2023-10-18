@@ -264,14 +264,12 @@ def main(_):
 
     logger.info("***** Running training *****")
     logger.info(f"  Num Epochs = {config.num_epochs}")
-    logger.info(f"  Sample batch size per device = {config.sample.batch_size}")
+    logger.info(f"  Total samples used for evaluation per epoch = {samples_per_epoch}")
     logger.info(f"  Train batch size per device = {config.train.batch_size}")
     logger.info(f"  Gradient Accumulation steps = {config.train.gradient_accumulation_steps}")
     logger.info("")
-    logger.info(f"  Total number of samples per epoch = {samples_per_epoch}")
     logger.info(f"  Total train batch size (w. parallel, distributed & accumulation) = {total_train_batch_size}")
-    logger.info(f"  Number of gradient updates per inner epoch = {samples_per_epoch // total_train_batch_size}")
-    logger.info(f"  Number of inner epochs = {config.train.num_inner_epochs}")
+    logger.info(f"  Number of gradient updates per epoch = {config.train.num_steps_per_epoch}")
 
     if config.resume_from:
         logger.info(f"Resuming from {config.resume_from}")
@@ -410,9 +408,10 @@ def main(_):
 
             batch_rewards = batch["rewards"].to(accelerator.device, dtype=inference_dtype)
             reward_weights = torch.exp(batch_rewards / config.train.temperature)
+            reward_weights = reward_weights / reward_weights.sum()
 
             loss = F.mse_loss(model_pred.float(), noise.float(), reduction="none")
-            loss = loss.mean(dim=list(range(1, len(loss.shape)))) * reward_weights
+            loss = loss.sum(dim=list(range(1, len(loss.shape)))) * reward_weights
             weighted_loss = loss.mean()
             
             return weighted_loss
