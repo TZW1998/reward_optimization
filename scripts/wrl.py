@@ -237,8 +237,6 @@ def main(_):
         input_ids = torch.stack([example["input_ids"][0] for example in examples])
         
         rewards = torch.stack([example["rewards"] for example in examples])
-
-        print(pixel_values.shape, input_ids.shape, rewards.shape, examples[0]["input_ids"].shape)
         return {"pixel_values": pixel_values, "input_ids": input_ids, "rewards": rewards}
 
     offline_dataset = ImageRewardDataset(config.dataset, pipeline.tokenizer)
@@ -400,6 +398,7 @@ def main(_):
 
 
             # Predict the noise residual and compute loss
+            print("noisy_latents.shape: ", noisy_latents.shape, "timesteps.shape: ", timesteps.shape, "embeds.shape: ", embeds.shape)
             with autocast():
                 model_pred = unet(noisy_latents, timesteps, embeds).sample
 
