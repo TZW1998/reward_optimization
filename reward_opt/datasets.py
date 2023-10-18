@@ -37,7 +37,8 @@ class ImageRewardDataset(Dataset):
         image = self.image_transforms(image)
         input_id = self.tokenizer(
             self.prompts_list[idx],
-            padding="do_not_pad",
+            return_tensors="pt",
+            padding="max_length",
             truncation=True,
             max_length=self.tokenizer.model_max_length,
         ).input_ids
