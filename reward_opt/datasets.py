@@ -13,7 +13,9 @@ class ImageRewardDataset(Dataset):
     """dataset for (image, prompt, reward) triplets."""
 
     def __init__(self, dataset_name, tokenizer):
-        image_folder = ASSETS_PATH.joinpath(dataset_name + ".txt")
+        image_folder_path = ASSETS_PATH.joinpath(dataset_name + ".txt")
+        with open(image_folder_path, "r") as f:
+            image_folder = f.read()
         images_name_list = os.listdir(image_folder)
         self.prompts_list = [name.strip(".png").split("_")[-1] for name in images_name_list]
         self.rewards_list = [float(name.strip(".png").split("_"))[2] for name in images_name_list]
