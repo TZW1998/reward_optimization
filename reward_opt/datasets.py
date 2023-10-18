@@ -30,7 +30,7 @@ class ImageRewardDataset(Dataset):
 
     def __getitem__(self, idx):
         image = Image.open(self.images_full_path_list[idx])
-        reward = torch.float32(self.rewards_list[0])
+        reward = torch.FloatTensor(self.rewards_list[0])
 
         if not image.mode == "RGB":
             image = image.convert("RGB")
