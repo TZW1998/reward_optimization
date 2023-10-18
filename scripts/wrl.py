@@ -272,10 +272,6 @@ def main(_):
     logger.info(f"  Number of gradient updates per inner epoch = {samples_per_epoch // total_train_batch_size}")
     logger.info(f"  Number of inner epochs = {config.train.num_inner_epochs}")
 
-    assert config.sample.batch_size >= config.train.batch_size
-    assert config.sample.batch_size % config.train.batch_size == 0
-    assert samples_per_epoch % total_train_batch_size == 0
-
     if config.resume_from:
         logger.info(f"Resuming from {config.resume_from}")
         accelerator.load_state(config.resume_from)
