@@ -373,7 +373,8 @@ def main(_):
         # function for computing reward weighted loss
         def reward_weighted_loss_fn(batch):
             # Convert images to latent space
-            latents = pipeline.vae.encode(batch["pixel_values"]).latent_dist.sample()
+            batch_pixel_values = batch["pixel_values"].to(accelerator.device, dtype=inference_dtype)
+            latents = pipeline.vae.encode(batch_pixel_values).latent_dist.sample()
             latents = latents * pipeline.vae.config.scaling_factor
 
             # Sample noise that we'll add to the latents
@@ -389,7 +390,7 @@ def main(_):
             noisy_latents = noise_scheduler.add_noise(latents, noise, timesteps)
 
             # Get the text embedding for conditioning
-            embeds = pipeline.text_encoder(batch["input_ids"])[0]
+            embeds = pipeline.text_encoder(batch["input_ids"].to(accelerator.device))[0]
 
             if config.train.cfg:
                 # concat negative prompts to sample prompts to avoid two forward passes
@@ -406,7 +407,7 @@ def main(_):
                     model_pred_text - model_pred_uncond
                 )
 
-            batch_rewards = batch["reward"]
+            batch_rewards = batch["reward"].to(accelerator.device, dtype=inference_dtype)
             reward_weights = torch.exp(batch_rewards / config.train.temperature)
 
             loss = F.mse_loss(model_pred.float(), noise.float(), reduction="none")
