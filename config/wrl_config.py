@@ -52,10 +52,10 @@ def base():
     # classifier-free guidance weight. 1.0 is no guidance.
     sample.guidance_scale = 5.0
     # batch size (per GPU!) to use for sampling.
-    sample.batch_size = 8
+    sample.batch_size = 1
     # number of batches to sample per epoch. the total number of samples per epoch is `num_batches_per_epoch *
     # batch_size * num_gpus`.
-    sample.num_batches_per_epoch = 16
+    sample.num_batches_per_epoch = 1
 
     ###### offline dataset ######
     config.dataset = "simple_animals_aesthetic_datasets"
