@@ -238,7 +238,7 @@ def main(_):
         
         rewards = torch.stack([example["rewards"] for example in examples])
 
-        import ipdb; ipdb.set_trace()
+        print(input_ids.shape, rewards.shape)
         return {"pixel_values": pixel_values, "input_ids": input_ids, "rewards": rewards}
 
     offline_dataset = ImageRewardDataset(config.dataset, pipeline.tokenizer)
