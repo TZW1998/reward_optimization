@@ -324,7 +324,6 @@ def main(_):
 
             samples.append(
                 {
-                    "prompts": prompts,
                     "rewards": rewards,
                 }
             )
