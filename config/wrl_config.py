@@ -64,7 +64,7 @@ def base():
     config.train = train = ml_collections.ConfigDict()
     # should tune num_steps_per_epoch, batch_size, gradient_accumulation_steps so that each epoch consume roungly the same with ddpo.
     # number of gradient steps per epoch. This means that at each epoch, it will load num_steps * batch_size * num_gpu * gradient_accumulation_steps samples
-    train.num_steps_per_epoch = 10 
+    train.num_steps_per_epoch = 100 
     # batch size (per GPU!) to use for training.
     train.batch_size = 2
     # whether to use the 8bit Adam optimizer from bitsandbytes.
@@ -81,7 +81,7 @@ def base():
     train.adam_epsilon = 1e-8
     # number of gradient accumulation steps. the effective batch size is `batch_size * num_gpus *
     # gradient_accumulation_steps`.
-    train.gradient_accumulation_steps = 16
+    train.gradient_accumulation_steps = 32
     # maximum gradient norm for gradient clipping.
     train.max_grad_norm = 1.0
     # number of inner epochs per outer epoch. each inner epoch is one iteration through the current subset of offline datasets
