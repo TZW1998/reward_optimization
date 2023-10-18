@@ -18,7 +18,7 @@ class ImageRewardDataset(Dataset):
             image_folder = f.read()
         images_name_list = os.listdir(image_folder)
         self.prompts_list = [name.strip(".png").split("_")[-1] for name in images_name_list]
-        self.rewards_list = [float(name.strip(".png").split("_")[2]) for name in images_name_list]
+        self.rewards_list = [float(name.strip(".png").split("_")[3]) for name in images_name_list]
         self.images_full_path_list = [os.path.join(image_folder, name) for name in images_name_list]
         self.tokenizer = tokenizer
         self.image_transforms = transforms.Compose(
