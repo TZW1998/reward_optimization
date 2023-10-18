@@ -66,7 +66,7 @@ def base():
     # number of gradient steps per epoch. This means that at each epoch, it will load num_steps * batch_size * num_gpu * gradient_accumulation_steps samples
     train.num_steps_per_epoch = 10 
     # batch size (per GPU!) to use for training.
-    train.batch_size = 4
+    train.batch_size = 2
     # whether to use the 8bit Adam optimizer from bitsandbytes.
     train.use_8bit_adam = False
     # learning rate.
