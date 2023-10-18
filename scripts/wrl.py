@@ -408,7 +408,7 @@ def main(_):
                 else:
                     model_pred = unet(noisy_latents, timesteps, embeds).sample
 
-            batch_rewards = batch["reward"].to(accelerator.device, dtype=inference_dtype)
+            batch_rewards = batch["rewards"].to(accelerator.device, dtype=inference_dtype)
             reward_weights = torch.exp(batch_rewards / config.train.temperature)
 
             loss = F.mse_loss(model_pred.float(), noise.float(), reduction="none")
