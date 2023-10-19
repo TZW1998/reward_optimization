@@ -435,8 +435,6 @@ def main(_):
             gathered_batch_rewards = accelerator.gather(batch_rewards)
             gathered_reward_weights = torch.softmax(gathered_batch_rewards / config.train.temperature, dim = 0)
 
-            print("gathered_reward_weights statisitcs: ", gathered_reward_weights.shape, gathered_reward_weights.min(), torch.quantile(gathered_reward_weights, 0.25), torch.quantile(gathered_reward_weights, 0.5), torch.quantile(gathered_reward_weights, 0.75), gathered_reward_weights.max())
-
             # weights for current process, each process have actual_batch_size_per_device samples
             proc_id = accelerator.process_index
             reward_weights = gathered_reward_weights[(proc_id * actual_batch_size_per_device) : ((proc_id + 1) * actual_batch_size_per_device)]
