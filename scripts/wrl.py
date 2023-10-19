@@ -405,7 +405,7 @@ def main(_):
                 else:
                     model_pred = unet(noisy_latents, timesteps, embeds).sample
 
-            batch_rewards = batch["rewards"].to(accelerator.device, dtype=inference_dtype)
+            batch_rewards = batch["rewards"].to(accelerator.device, dtype=torch.float32)
             reward_weights = torch.softmax(batch_rewards / config.train.temperature, dim = 0)
 
             print("reward_weights statisitcs: ", reward_weights.min(), torch.quantile(reward_weights, 0.25), torch.quantile(reward_weights, 0.5), torch.quantile(reward_weights, 0.75), reward_weights.max())
