@@ -241,10 +241,11 @@ def main(_):
 
     offline_dataset = ImageRewardDataset(config.dataset, pipeline.tokenizer)
 
+    actual_batch_size_per_device = config.train.batch_size * config.train.gradient_accumulation_steps
     offline_dataloader = torch.utils.data.DataLoader(offline_dataset,
                                                         shuffle=True,
                                                         collate_fn=collate_fn,
-                                                        batch_size=config.train.batch_size,
+                                                        batch_size=actual_batch_size_per_device,
                                                         num_workers=2,
                                                     )
 
@@ -367,8 +368,8 @@ def main(_):
 
 
         #################### TRAINING ####################
-        # function for computing reward weighted loss
-        def reward_weighted_loss_fn(batch):
+        # function for computing weighted loss and do accumulated backward
+        def per_sample_loss(batch):
             # Convert images to latent space
             batch_pixel_values = batch["pixel_values"].to(accelerator.device, dtype=inference_dtype)
             latents = pipeline.vae.encode(batch_pixel_values).latent_dist.sample()
@@ -405,28 +406,17 @@ def main(_):
                 else:
                     model_pred = unet(noisy_latents, timesteps, embeds).sample
 
-            
-
-            batch_rewards = batch["rewards"].to(accelerator.device, dtype=torch.float32)
-
-            print("reward_weights statisitcs: ", batch_rewards.shape, batch_rewards.min(), torch.quantile(batch_rewards, 0.25), torch.quantile(batch_rewards, 0.5), torch.quantile(batch_rewards, 0.75), batch_rewards.max())
-
-            reward_weights = torch.softmax(batch_rewards / config.train.temperature, dim = 0)
-
-            print("reward_weights statisitcs: ", reward_weights.shape, reward_weights.min(), torch.quantile(reward_weights, 0.25), torch.quantile(reward_weights, 0.5), torch.quantile(reward_weights, 0.75), reward_weights.max())
-
             loss = F.mse_loss(model_pred.float(), noise.float(), reduction="none")
-            loss = loss.mean(dim=list(range(1, len(loss.shape)))) * reward_weights
-            weighted_loss = loss.sum()
-            
-            return weighted_loss
+            sample_loss = loss.mean(dim=list(range(1, len(loss.shape)))) 
+
+            return sample_loss
         
         # main training loop, execute num_steps_per_epoch * gradient_accumulation_steps times backpropogation
         data_iterable = iter(offline_dataloader)
         pipeline.unet.train()
         info = defaultdict(list)
-        total_backpropogation_steps = config.train.num_steps_per_epoch * config.train.gradient_accumulation_steps
-        for step in tqdm(range(total_backpropogation_steps),
+
+        for step in tqdm(range(config.train.num_steps_per_epoch),
             desc=f"Epoch {epoch}: training",
             position=0,
             disable=not accelerator.is_local_main_process,
@@ -438,29 +428,47 @@ def main(_):
                 data_iterable = iter(offline_dataloader)
                 batch = next(data_iterable)
 
-            # computing loss
-            with accelerator.accumulate(unet):
-                # weighted_reward_loss
-                loss = reward_weighted_loss_fn(batch)
-                info["loss"].append(loss)
+            # batch weights
+            batch_rewards = batch["rewards"].to(accelerator.device, dtype=torch.float32)
 
-                # backward pass
-                accelerator.backward(loss)
-                if accelerator.sync_gradients:
-                    accelerator.clip_grad_norm_(unet.parameters(), config.train.max_grad_norm)
-                optimizer.step()
-                optimizer.zero_grad()
+            # gather the batch_rewards across processes
+            gathered_batch_rewards = accelerator.gather(batch_rewards)
+            gathered_reward_weights = torch.softmax(gathered_batch_rewards / config.train.temperature, dim = 0)
 
-            # Checks if the accelerator has performed an optimization step behind the scenes
-            if accelerator.sync_gradients:
-                # log training-related stuff
-                info = {k: torch.mean(torch.stack(v)) for k, v in info.items()}
-                info = accelerator.reduce(info, reduction="mean")
-                info.update({"epoch": epoch, "step": step})
-                info = defaultdict(list)
+            print("gathered_reward_weights statisitcs: ", gathered_reward_weights.shape, gathered_reward_weights.min(), torch.quantile(gathered_reward_weights, 0.25), torch.quantile(gathered_reward_weights, 0.5), torch.quantile(gathered_reward_weights, 0.75), gathered_reward_weights.max())
 
-        # make sure we did an optimization step at the end of the inner epoch
-        assert accelerator.sync_gradients
+            # weights for current process, each process have actual_batch_size_per_device samples
+            proc_id = accelerator.process_index
+            reward_weights = gathered_reward_weights[(proc_id * actual_batch_size_per_device) : ((proc_id + 1) * actual_batch_size_per_device)]
+
+            
+
+            # backward pass for config.train.gradient_accumulation_steps times
+            for now_acc_step in range(config.train.gradient_accumulation_steps):
+                now_sub_batch = {k: v[(now_acc_step * config.train.batch_size) : ((now_acc_step + 1) * config.train.batch_size)] for k, v in batch.items()}
+                now_sub_batch_weights = reward_weights[(now_acc_step * config.train.batch_size) : ((now_acc_step + 1) * config.train.batch_size)]
+                with accelerator.accumulate(unet):
+                    # computing loss and do accumulated backward
+                    sample_loss = per_sample_loss(now_sub_batch)
+                    loss = (sample_loss * now_sub_batch_weights).sum()
+                    info["loss"].append(loss)
+
+                    # backward pass
+                    accelerator.backward(loss)
+
+                    # Checks if the accelerator has performed an optimization step behind the scenes
+                    if accelerator.sync_gradients:
+                        accelerator.clip_grad_norm_(unet.parameters(), config.train.max_grad_norm)
+                    optimizer.step()
+                    optimizer.zero_grad()
+
+            # make sure we did an optimization step at the end of every batch
+            assert accelerator.sync_gradients
+            info = {k: torch.mean(torch.stack(v)) for k, v in info.items()}
+            info = accelerator.reduce(info, reduction="mean")
+            info.update({"epoch": epoch, "step": step})
+            info = defaultdict(list)
+
 
         if epoch != 0 and epoch % config.save_freq == 0 and accelerator.is_main_process:
             accelerator.save_state()
