@@ -90,7 +90,7 @@ def base():
     # sampling will be used during training.
     train.cfg = True
     # the temperature used for reward-weighted loss
-    train.temperature = 0.1
+    train.temperature = 0.3
 
     ###### Prompt Function (only for evaluate) ######
     # prompt function to use. see `prompts.py` for available prompt functions.
