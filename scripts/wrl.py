@@ -408,6 +408,8 @@ def main(_):
             batch_rewards = batch["rewards"].to(accelerator.device, dtype=inference_dtype)
             reward_weights = torch.softmax(batch_rewards / config.train.temperature, dim = 0)
 
+            print("reward_weights statisitcs: ", reward_weights.min(), torch.quantile(reward_weights, 0.25), torch.quantile(reward_weights, 0.5), torch.quantile(reward_weights, 0.75), reward_weights.max())
+
             loss = F.mse_loss(model_pred.float(), noise.float(), reduction="none")
             loss = loss.mean(dim=list(range(1, len(loss.shape)))) * reward_weights
             weighted_loss = loss.sum()
