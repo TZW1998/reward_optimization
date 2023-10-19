@@ -405,10 +405,15 @@ def main(_):
                 else:
                     model_pred = unet(noisy_latents, timesteps, embeds).sample
 
+            
+
             batch_rewards = batch["rewards"].to(accelerator.device, dtype=torch.float32)
+
+            print("reward_weights statisitcs: ", batch_rewards.shape, batch_rewards.min(), torch.quantile(batch_rewards, 0.25), torch.quantile(batch_rewards, 0.5), torch.quantile(batch_rewards, 0.75), batch_rewards.max())
+
             reward_weights = torch.softmax(batch_rewards / config.train.temperature, dim = 0)
 
-            print("reward_weights statisitcs: ", reward_weights.min(), torch.quantile(reward_weights, 0.25), torch.quantile(reward_weights, 0.5), torch.quantile(reward_weights, 0.75), reward_weights.max())
+            print("reward_weights statisitcs: ", reward_weights.shape, reward_weights.min(), torch.quantile(reward_weights, 0.25), torch.quantile(reward_weights, 0.5), torch.quantile(reward_weights, 0.75), reward_weights.max())
 
             loss = F.mse_loss(model_pred.float(), noise.float(), reduction="none")
             loss = loss.mean(dim=list(range(1, len(loss.shape)))) * reward_weights
