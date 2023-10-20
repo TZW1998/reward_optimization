@@ -439,7 +439,7 @@ def main(_):
                 with accelerator.accumulate(unet):
                     # computing loss and do accumulated backward
                     sample_loss = per_sample_loss(now_sub_batch)
-                    loss = (sample_loss * now_sub_batch_weights).sum()
+                    loss = (sample_loss * now_sub_batch_weights).mean()
                     info["loss"].append(loss)
 
                     # backward pass

@@ -70,7 +70,7 @@ def base():
     # whether to use the 8bit Adam optimizer from bitsandbytes.
     train.use_8bit_adam = False
     # learning rate.
-    train.learning_rate = 3e-4
+    train.learning_rate = 1e-4
     # Adam beta1.
     train.adam_beta1 = 0.9
     # Adam beta2.
@@ -83,7 +83,7 @@ def base():
     # gradient_accumulation_steps`.
     train.gradient_accumulation_steps = 32
     # maximum gradient norm for gradient clipping.
-    train.max_grad_norm = 1.0
+    train.max_grad_norm = 100.0
     # number of inner epochs per outer epoch. each inner epoch is one iteration through the current subset of offline datasets
     train.num_inner_epochs = 1
     # whether or not to use classifier-free guidance during training. if enabled, the same guidance scale used during
