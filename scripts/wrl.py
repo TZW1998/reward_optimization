@@ -430,16 +430,7 @@ def main(_):
 
             # batch weights
             batch_rewards = batch["rewards"].to(accelerator.device, dtype=torch.float32)
-
-            # gather the batch_rewards across processes
-            gathered_batch_rewards = accelerator.gather(batch_rewards)
-            gathered_reward_weights = torch.softmax(gathered_batch_rewards / config.train.temperature, dim = 0)
-
-            # weights for current process, each process have actual_batch_size_per_device samples
-            proc_id = accelerator.process_index
-            reward_weights = gathered_reward_weights[(proc_id * actual_batch_size_per_device) : ((proc_id + 1) * actual_batch_size_per_device)]
-
-            
+            reward_weights = torch.exp(batch_rewards / config.train.temperature)
 
             # backward pass for config.train.gradient_accumulation_steps times
             for now_acc_step in range(config.train.gradient_accumulation_steps):

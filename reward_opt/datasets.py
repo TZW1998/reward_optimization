@@ -24,13 +24,14 @@ class ImageRewardDataset(Dataset):
         self.image_transforms = transforms.Compose(
             [transforms.ToTensor(), transforms.Normalize([0.5], [0.5])]
         )
+        self.max_reward = max(self.rewards_list)
 
     def __len__(self):
         return len(self.images_full_path_list)
 
     def __getitem__(self, idx):
         image = Image.open(self.images_full_path_list[idx])
-        reward = torch.tensor(self.rewards_list[idx])
+        reward = torch.tensor(self.rewards_list[idx] - self.max_reward) # normalize reward
 
         if not image.mode == "RGB":
             image = image.convert("RGB")
