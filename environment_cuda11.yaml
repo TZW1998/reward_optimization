@@ -1,0 +1,29 @@
+name: ropt11
+channels:
+  - pytorch
+  - nvidia
+  - conda-forge
+  - defaults
+dependencies:
+  - pip
+  - python=3.11.5
+  - pytorch
+  - pytorch-cuda=12.1
+  - setuptools
+  - torchaudio
+  - torchtriton
+  - typing_extensions
+  - accelerate
+  - torchvision
+  - jupyterlab
+  - ipykernel
+  - matplotlib
+  - pip:
+    - ml-collections
+    - absl-py
+    - diffusers[torch]
+    - transformers
+    - wandb
+    - inflect
+    - pydantic
+    - ipdb
