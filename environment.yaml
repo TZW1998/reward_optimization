@@ -94,6 +94,8 @@ dependencies:
   - zstd=1.5.5=hc292b87_0
   - accelerate==0.17
   - torchvision
+  - jupyter
+  - matplotlib
   - pip:
     - ml-collections
     - absl-py
