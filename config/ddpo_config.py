@@ -1,6 +1,7 @@
 import ml_collections
 import imp
 import os
+from reward_opt.global_path import *
 
 
 def base():
@@ -38,7 +39,7 @@ def base():
     config.pretrained = pretrained = ml_collections.ConfigDict()
     # base model to load. either a path to a local directory, or a model name from the HuggingFace model hub.
     #pretrained.model = "/home/zhiwei/research_dev/diffusion_codebase/backbone_models/sdv1-5-full-diffuser"
-    pretrained.model = "/home/zhiweitang/sdv1-5-full-diffuser"
+    pretrained.model = SD_PRETRAINED_PATH
     # revision of the model to load.
     pretrained.revision = "main"
 
@@ -100,7 +101,7 @@ def base():
 
     ###### Reward Function ######
     # reward function to use. see `rewards.py` for available reward functions.
-    config.reward_fn = "aesthetic_score"
+    config.reward_fn = "jpeg_compressibility"
 
     ###### Per-Prompt Stat Tracking ######
     # when enabled, the model will track the mean and std of reward on a per-prompt basis and use that to compute
