@@ -76,7 +76,7 @@ def main(_):
     )
     if accelerator.is_main_process:
         accelerator.init_trackers(
-            project_name="reward_opt-pytorch", config=config.to_dict(), init_kwargs={"wandb": {"name": config.run_name}}
+            project_name="reward_opt-pytorch", config=config.to_dict(), init_kwargs={"wandb": {"name": f"{config.run_name}_{config.prompt_fn}_{config.reward_fn}"}}
         )
     logger.info(f"\n{config}")
 
