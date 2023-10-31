@@ -6,9 +6,10 @@ import torch.nn as nn
 import numpy as np
 from transformers import CLIPModel, CLIPProcessor
 from PIL import Image
+from reward_opt.global_path import *
 
 ASSETS_PATH = resources.files("reward_opt.assets")
-MODEL_PATH = "/home/zhiweitang/clip-vit-large-patch14"
+MODEL_PATH = CLIP_VIT_PRETRAINED_PATH
 # MODEL_PATH = "/home/zhiwei/research_dev/clip-vit-large-patch14"
 
 class MLP(nn.Module):
