@@ -1,6 +1,7 @@
 import ml_collections
 import imp
 import os
+from reward_opt.global_path import *
 
 
 def base():
@@ -8,7 +9,7 @@ def base():
 
     ###### General ######
     # run name for wandb logging and checkpoint saving -- if not provided, will be auto-generated based on the datetime.
-    config.run_name = "weighted_reward_loss"
+    config.run_name = "offline_wrl"
     # random seed for reproducibility.
     config.seed = 42
     # top-level logging directory for checkpoint saving.
@@ -38,7 +39,7 @@ def base():
     config.pretrained = pretrained = ml_collections.ConfigDict()
     # base model to load. either a path to a local directory, or a model name from the HuggingFace model hub.
     #pretrained.model = "/home/zhiwei/research_dev/diffusion_codebase/backbone_models/sdv1-5-full-diffuser"
-    pretrained.model = "/home/zhiweitang/sdv1-5-full-diffuser"
+    pretrained.model = SD_PRETRAINED_PATH
     # revision of the model to load.
     pretrained.revision = "main"
 
@@ -56,9 +57,6 @@ def base():
     # number of batches to sample per epoch. the total number of samples per epoch is `num_batches_per_epoch *
     # batch_size * num_gpus`.
     sample.num_batches_per_epoch = 16
-
-    ###### offline dataset ######
-    config.dataset = "simple_animals_aesthetic_datasets"
 
     ###### Training ######
     config.train = train = ml_collections.ConfigDict()
@@ -89,8 +87,6 @@ def base():
     # whether or not to use classifier-free guidance during training. if enabled, the same guidance scale used during
     # sampling will be used during training.
     train.cfg = True
-    # the temperature used for reward-weighted loss
-    train.temperature = 0.2
 
     ###### Prompt Function (only for evaluate) ######
     # prompt function to use. see `prompts.py` for available prompt functions.
@@ -100,7 +96,7 @@ def base():
 
     ###### Reward Function (only for evaluate) ######
     # reward function to use. see `rewards.py` for available reward functions.
-    config.reward_fn = "aesthetic_score"
+    config.reward_fn = "jpeg_compressibility"
 
     return config
 

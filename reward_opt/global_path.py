@@ -11,7 +11,7 @@ OFFLINE_IMAGE_PATH = {
 # Path to offline reward data
 OFFLINE_REWARD_PATH = {
     "simple_animals": {
-        "aesthetic_score": "/home/zhiweitang/simple_animals_reward/aesthetic.txt",
-        "jpeg_compressibility" : "/home/zhiweitang/simple_animals_reward/compressibility.txt",
+        "aesthetic_score": "/home/zhiweitang/simple_animals_aesthetic_score.json",
+        "jpeg_compressibility" : "/home/zhiweitang/simple_animals_jpeg_compressibility.json",
     }
 }

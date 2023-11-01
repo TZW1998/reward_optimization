@@ -35,6 +35,13 @@ config_flags.DEFINE_config_file("config", "config/wrl_config.py", "Training conf
 
 logger = get_logger(__name__)
 
+### MODIFY THIS: Decide how to compute weights using reward, here is one choice
+def reward2weight(rewards):
+    TEMPERATURE = 0.2
+    weights = torch.exp(rewards / TEMPERATURE)
+    return weights
+
+
 def main(_):
     # basic Accelerate and logging setup
     config = FLAGS.config
@@ -74,7 +81,7 @@ def main(_):
     )
     if accelerator.is_main_process:
         accelerator.init_trackers(
-            project_name="reward_opt-pytorch", config=config.to_dict(), init_kwargs={"wandb": {"name": config.run_name}}
+            project_name="reward_opt-pytorch", config=config.to_dict(), init_kwargs={"wandb": {"name": f"{config.run_name}_{config.prompt_fn}_{config.reward_fn}"}}
         )
     logger.info(f"\n{config}")
 
@@ -239,7 +246,7 @@ def main(_):
         rewards = torch.stack([example["rewards"] for example in examples])
         return {"pixel_values": pixel_values, "input_ids": input_ids, "rewards": rewards}
 
-    offline_dataset = ImageRewardDataset(config.dataset, pipeline.tokenizer)
+    offline_dataset = ImageRewardDataset(config.prompt_fn, config.reward_fn, pipeline.tokenizer)
 
     actual_batch_size_per_device = config.train.batch_size * config.train.gradient_accumulation_steps
     offline_dataloader = torch.utils.data.DataLoader(offline_dataset,
@@ -430,7 +437,9 @@ def main(_):
 
             # batch weights
             batch_rewards = batch["rewards"].to(accelerator.device, dtype=torch.float32)
-            reward_weights = torch.exp(batch_rewards / config.train.temperature)
+
+            # compute the weights
+            reward_weights = reward2weight(batch_rewards)
 
             # backward pass for config.train.gradient_accumulation_steps times
             for now_acc_step in range(config.train.gradient_accumulation_steps):
