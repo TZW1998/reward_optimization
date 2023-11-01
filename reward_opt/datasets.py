@@ -34,7 +34,7 @@ class ImageRewardDataset(Dataset):
         return len(self.images_name_list)
 
     def __getitem__(self, idx):
-        image = Image.open(os.join(self.image_folder, self.images_name_list[idx]))
+        image = Image.open(os.path.join(self.image_folder, self.images_name_list[idx]))
 
         reward = self.reward_data[self.images_name_list[idx]]
         # normalize reward to [0,1]
