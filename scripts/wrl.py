@@ -39,7 +39,7 @@ logger = get_logger(__name__)
 def reward2weight(rewards):
     TEMPERATURE = 0.2
     # give 1 if reward > -70, otherwise give 0
-    weights = torch.float32(rewards > -70)
+    weights = (rewards > -70).float()
     return weights
 
 
