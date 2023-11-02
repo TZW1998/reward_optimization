@@ -38,7 +38,8 @@ logger = get_logger(__name__)
 ### MODIFY THIS: Decide how to compute weights using reward, here is one choice
 def reward2weight(rewards):
     TEMPERATURE = 0.2
-    weights = torch.exp(rewards / TEMPERATURE)
+    # give 1 if reward > -70, otherwise give 0
+    weights = torch.float32(rewards > -70)
     return weights
 
 
@@ -467,9 +468,10 @@ def main(_):
             info.update({"epoch": epoch, "step": step})
             info = defaultdict(list)
 
-
-        if epoch != 0 and epoch % config.save_freq == 0 and accelerator.is_main_process:
-            accelerator.save_state()
+        # ToDo: this save_state causes some bugs, don't know why
+        #if epoch != 0 and epoch % config.save_freq == 0 and accelerator.is_main_process:
+        #    accelerator.save_state()
+        # maybe it is because save_state took too much time, so maybe we need to save the model manually
 
 
 if __name__ == "__main__":

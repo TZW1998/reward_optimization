@@ -502,8 +502,9 @@ def main(_):
             # make sure we did an optimization step at the end of the inner epoch
             assert accelerator.sync_gradients
 
-        if epoch != 0 and epoch % config.save_freq == 0 and accelerator.is_main_process:
-            accelerator.save_state()
+        # ToDo: this save_state causes some bugs, don't know why
+        # if epoch != 0 and epoch % config.save_freq == 0 and accelerator.is_main_process:
+        #     accelerator.save_state()
 
 
 if __name__ == "__main__":
