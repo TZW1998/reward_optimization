@@ -449,6 +449,9 @@ def main(_):
                 with accelerator.accumulate(unet):
                     # computing loss and do accumulated backward
                     sample_loss = per_sample_loss(now_sub_batch)
+
+                    import ipdb; ipdb.set_trace()
+
                     loss = (sample_loss * now_sub_batch_weights).mean()
                     info["loss"].append(loss)
 
