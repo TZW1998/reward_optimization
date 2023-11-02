@@ -30,18 +30,24 @@ class ImageRewardDataset(Dataset):
         self.reward_max = max(self.reward_list)
         self.reward_min = min(self.reward_list)
 
+        # only finetune on the top 10% of data with highest reward
+        threshold = np.percentile(self.reward_list, 90)
+        self.filtered_images_name_list = [img for img in self.images_name_list if self.reward_data[img] >= threshold]
+
+
     def __len__(self):
-        return len(self.images_name_list)
+        return len(self.filtered_images_name_list)
 
     def __getitem__(self, idx):
-        image = Image.open(os.path.join(self.image_folder, self.images_name_list[idx]))
+        now_image_name = self.filtered_images_name_list[idx]
+        image = Image.open(os.path.join(self.image_folder, now_image_name))
 
-        reward = self.reward_data[self.images_name_list[idx]]
+        reward = self.reward_data[now_image_name]
         # normalize reward to [0,1]
         reward = (reward - self.reward_min) / (self.reward_max - self.reward_min)
         reward = torch.tensor(reward)
 
-        prompt = self.images_name_list[idx].split("_")[-1].strip(".png")
+        prompt = now_image_name.split("_")[-1].strip(".png")
 
         if not image.mode == "RGB":
             image = image.convert("RGB")

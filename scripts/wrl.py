@@ -37,9 +37,8 @@ logger = get_logger(__name__)
 
 ### MODIFY THIS: Decide how to compute weights using reward, here is one choice
 def reward2weight(rewards):
-    TEMPERATURE = 0.2
     # give 1 if reward > -70, otherwise give 0
-    weights = (rewards > 0.8).float()
+    weights = torch.ones_like(rewards)
     return weights
 
 
