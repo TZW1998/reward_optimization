@@ -32,7 +32,7 @@ class ImageRewardDataset(Dataset):
 
         # only finetune on the top 10% of data with highest reward
         threshold = np.percentile(self.reward_list, 90)
-        self.filtered_images_name_list = [img for img in self.images_name_list if self.reward_data[img] >= threshold]
+        self.filtered_images_name_list = self.images_name_list # [img for img in self.images_name_list if self.reward_data[img] >= threshold]
 
 
     def __len__(self):
