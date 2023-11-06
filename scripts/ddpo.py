@@ -374,11 +374,11 @@ def main(_):
         # log rewards and time at main process
         if accelerator.is_local_main_process:
             now_time = time.time() - start_time
-            log_dict = {"reward": rewards, "epoch": epoch, "reward_mean": rewards.mean(), "reward_std": rewards.std()}
+            log_dict = {"time": now_time, "reward": rewards, "reward_mean": rewards.mean(), "reward_std": rewards.std()}
             for q, v in zip(use_quantiles, quantiles):
                 log_dict[f"reward_q{q}"] = v
             accelerator.log(log_dict,
-                step=now_time,
+                step=epoch,
             )
 
         # per-prompt mean/std tracking
