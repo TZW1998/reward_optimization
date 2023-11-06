@@ -242,4 +242,4 @@ def pipeline_with_logprob(
     if hasattr(self, "final_offload_hook") and self.final_offload_hook is not None:
         self.final_offload_hook.offload()
 
-    return image, has_nsfw_concept, all_latents, all_log_probs, mean_kl_div.mean()
+    return image, has_nsfw_concept, all_latents, all_log_probs, mean_kl_div

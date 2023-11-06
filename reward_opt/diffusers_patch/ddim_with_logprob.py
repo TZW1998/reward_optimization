@@ -200,8 +200,11 @@ def ddim_step_with_logprob(
     log_prob = log_prob.mean(dim=tuple(range(1, log_prob.ndim)))
 
     # kl divergence between prev_sample_mean and ref_prev_sample_mean
-    kl_div = (prev_sample_mean - ref_prev_sample_mean) ** 2 / (2 * (std_dev_t**2))
-    kl_div = kl_div.mean(dim=tuple(range(1, kl_div.ndim)))
+    if ref_model_output is None:
+        kl_div = (prev_sample_mean - ref_prev_sample_mean) ** 2 / (2 * (std_dev_t**2))
+        kl_div = kl_div.mean(dim=tuple(range(1, kl_div.ndim)))
 
-
-    return prev_sample.type(sample.dtype), log_prob, kl_div
+        return prev_sample.type(sample.dtype), log_prob, kl_div
+        
+    else:
+        return prev_sample.type(sample.dtype), log_prob

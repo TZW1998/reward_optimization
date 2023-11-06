@@ -335,6 +335,7 @@ def main(_):
                     "next_latents": latents[:, 1:],  # each entry is the latent after timestep t
                     "log_probs": log_probs,
                     "rewards": rewards,
+                    "mean_kl_div": mean_kl_div,
                 }
             )
 
@@ -372,7 +373,7 @@ def main(_):
         rewards = accelerator.gather(samples["rewards"]).cpu().numpy()
 
         # compute the mean_kl_div across processes via reduces
-        mean_kl_div = accelerator.reduce(mean_kl_div, reduction="mean")
+        reduced_mean_kl_div = accelerator.reduce(samples["mean_kl_div"].mean(), reduction="mean").item()
 
         # compute rewards quantiles
         use_quantiles = [0, 0.05, 0.1, 0.2, 0.5, 1.0]
@@ -381,7 +382,7 @@ def main(_):
         # log rewards and time at main process
         if accelerator.is_local_main_process:
             now_time = time.time() - start_time
-            log_dict = {"time": now_time, "reward": rewards, "reward_mean": rewards.mean(), "reward_std": rewards.std(), "mean_kl_div": mean_kl_div}
+            log_dict = {"time": now_time, "reward": rewards, "reward_mean": rewards.mean(), "reward_std": rewards.std(), "mean_kl_div": reduced_mean_kl_div}
             for q, v in zip(use_quantiles, quantiles):
                 log_dict[f"reward_q{q}"] = v
             accelerator.log(log_dict,
