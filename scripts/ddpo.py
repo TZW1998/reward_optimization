@@ -117,6 +117,9 @@ def main(_):
     if config.use_lora:
         pipeline.unet.to(accelerator.device, dtype=inference_dtype)
 
+    # clone the original unet so that we can compute the kl loss
+    pipeline.unet_orig = pipeline.unet.clone()
+
     if config.use_lora:
         # Set correct lora layers
         lora_attn_procs = {}
@@ -303,7 +306,7 @@ def main(_):
 
             # sample
             with autocast():
-                images, _, latents, log_probs = pipeline_with_logprob(
+                images, _, latents, log_probs, mean_kl_div = pipeline_with_logprob(
                     pipeline,
                     prompt_embeds=prompt_embeds,
                     negative_prompt_embeds=sample_neg_prompt_embeds,
@@ -367,6 +370,9 @@ def main(_):
         # gather rewards across processes
         rewards = accelerator.gather(samples["rewards"]).cpu().numpy()
 
+        # compute the mean_kl_div across processes via reduces
+        mean_kl_div = accelerator.reduce(mean_kl_div, reduction="mean")
+
         # compute rewards quantiles
         use_quantiles = [0, 0.05, 0.1, 0.2, 0.5, 1.0]
         quantiles = np.quantile(rewards, use_quantiles)
@@ -374,7 +380,7 @@ def main(_):
         # log rewards and time at main process
         if accelerator.is_local_main_process:
             now_time = time.time() - start_time
-            log_dict = {"time": now_time, "reward": rewards, "reward_mean": rewards.mean(), "reward_std": rewards.std()}
+            log_dict = {"time": now_time, "reward": rewards, "reward_mean": rewards.mean(), "reward_std": rewards.std(), "mean_kl_div": mean_kl_div}
             for q, v in zip(use_quantiles, quantiles):
                 log_dict[f"reward_q{q}"] = v
             accelerator.log(log_dict,

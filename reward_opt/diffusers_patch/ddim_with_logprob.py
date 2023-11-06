@@ -41,6 +41,7 @@ def ddim_step_with_logprob(
     use_clipped_model_output: bool = False,
     generator=None,
     prev_sample: Optional[torch.FloatTensor] = None,
+    ref_model_output = None
 ) -> Union[DDIMSchedulerOutput, Tuple]:
     """
     Predict the sample at the previous timestep by reversing the SDE. Core function to propagate the diffusion
@@ -105,12 +106,30 @@ def ddim_step_with_logprob(
     if self.config.prediction_type == "epsilon":
         pred_original_sample = (sample - beta_prod_t ** (0.5) * model_output) / alpha_prod_t ** (0.5)
         pred_epsilon = model_output
+
+        # for ref_model_output
+        if ref_model_output is not None:
+            ref_pred_original_sample = (sample - beta_prod_t ** (0.5) * ref_model_output) / alpha_prod_t ** (0.5)
+            ref_pred_epsilon = ref_model_output
+
     elif self.config.prediction_type == "sample":
         pred_original_sample = model_output
         pred_epsilon = (sample - alpha_prod_t ** (0.5) * pred_original_sample) / beta_prod_t ** (0.5)
+
+        # for ref_model_output
+        if ref_model_output is not None:
+            ref_pred_original_sample = ref_model_output
+            ref_pred_epsilon = (sample - alpha_prod_t ** (0.5) * ref_pred_original_sample) / beta_prod_t ** (0.5)
+
     elif self.config.prediction_type == "v_prediction":
         pred_original_sample = (alpha_prod_t**0.5) * sample - (beta_prod_t**0.5) * model_output
         pred_epsilon = (alpha_prod_t**0.5) * model_output + (beta_prod_t**0.5) * sample
+
+        # for ref_model_output
+        if ref_model_output is not None:
+            ref_pred_original_sample = (alpha_prod_t**0.5) * sample - (beta_prod_t**0.5) * ref_model_output
+            ref_pred_epsilon = (alpha_prod_t**0.5) * ref_model_output + (beta_prod_t**0.5) * sample
+
     else:
         raise ValueError(
             f"prediction_type given as {self.config.prediction_type} must be one of `epsilon`, `sample`, or"
@@ -120,10 +139,18 @@ def ddim_step_with_logprob(
     # 4. Clip or threshold "predicted x_0"
     if self.config.thresholding:
         pred_original_sample = self._threshold_sample(pred_original_sample)
+        # for ref_model_output
+        if ref_model_output is not None:
+            ref_pred_original_sample = self._threshold_sample(ref_pred_original_sample)
     elif self.config.clip_sample:
         pred_original_sample = pred_original_sample.clamp(
             -self.config.clip_sample_range, self.config.clip_sample_range
         )
+        # for ref_model_output
+        if ref_model_output is not None:
+            ref_pred_original_sample = ref_pred_original_sample.clamp(
+                -self.config.clip_sample_range, self.config.clip_sample_range
+            )
 
     # 5. compute variance: "sigma_t(η)" -> see formula (16)
     # σ_t = sqrt((1 − α_t−1)/(1 − α_t)) * sqrt(1 − α_t/α_t−1)
@@ -135,11 +162,21 @@ def ddim_step_with_logprob(
         # the pred_epsilon is always re-derived from the clipped x_0 in Glide
         pred_epsilon = (sample - alpha_prod_t ** (0.5) * pred_original_sample) / beta_prod_t ** (0.5)
 
+        # for ref_model_output
+        if ref_model_output is not None:
+            ref_pred_epsilon = (sample - alpha_prod_t ** (0.5) * ref_pred_original_sample) / beta_prod_t ** (0.5)
+
     # 6. compute "direction pointing to x_t" of formula (12) from https://arxiv.org/pdf/2010.02502.pdf
     pred_sample_direction = (1 - alpha_prod_t_prev - std_dev_t**2) ** (0.5) * pred_epsilon
+    # for ref_model_output
+    if ref_model_output is not None:
+        ref_pred_sample_direction = (1 - alpha_prod_t_prev - std_dev_t**2) ** (0.5) * ref_pred_epsilon
 
     # 7. compute x_t without "random noise" of formula (12) from https://arxiv.org/pdf/2010.02502.pdf
     prev_sample_mean = alpha_prod_t_prev ** (0.5) * pred_original_sample + pred_sample_direction
+    # for ref_model_output
+    if ref_model_output is not None:
+        ref_prev_sample_mean = alpha_prod_t_prev ** (0.5) * ref_pred_original_sample + ref_pred_sample_direction
 
     if prev_sample is not None and generator is not None:
         raise ValueError(
@@ -162,4 +199,9 @@ def ddim_step_with_logprob(
     # mean along all but batch dimension
     log_prob = log_prob.mean(dim=tuple(range(1, log_prob.ndim)))
 
-    return prev_sample.type(sample.dtype), log_prob
+    # kl divergence between prev_sample_mean and ref_prev_sample_mean
+    kl_div = (prev_sample_mean - ref_prev_sample_mean) ** 2 / (2 * (std_dev_t**2))
+    kl_div = kl_div.mean(dim=tuple(range(1, kl_div.ndim)))
+
+
+    return prev_sample.type(sample.dtype), log_prob, kl_div
