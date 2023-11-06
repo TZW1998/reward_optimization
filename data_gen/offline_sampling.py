@@ -32,8 +32,7 @@ def main():
     args.add_argument("--batch_size_per_device", type=int, default=1)
     args.add_argument("--model", type=str, default="/home/zhiweitang/sdv1-5-full-diffuser")
     args.add_argument("--prompt_fn", type=str, default="simple_animals")
-    args.add_argument("--reward_fn", type=str, default="aesthetic_score")
-    args.add_argument("--output_dir", type=str, default="simple_animals_aesthetic_score")
+    args.add_argument("--output_dir", type=str, default="simple_animals_data")
 
 
     args = args.parse_args()
@@ -49,7 +48,6 @@ def main():
 
     # prepare prompt and reward fn
     prompt_fn = getattr(reward_opt.prompts, args.prompt_fn)
-    reward_fn = getattr(reward_opt.rewards, args.reward_fn)()
 
     # generate negative prompt embeddings
     neg_prompt_embed = pipeline.text_encoder(
@@ -62,8 +60,6 @@ def main():
         ).input_ids.to(accelerator.device)
     )[0]
     sample_neg_prompt_embeds = neg_prompt_embed.repeat(args.batch_size_per_device, 1, 1)
-
-    executor = futures.ThreadPoolExecutor(max_workers=2)
 
     total_rounds = args.num_samples // (args.batch_size_per_device * accelerator.num_processes)
 
@@ -78,7 +74,6 @@ def main():
     # print info, including, prompt_fn, reward_fn total numsamples, numbers of gpu, total rounds
     if accelerator.is_local_main_process:
         print(f"Prompt function: {args.prompt_fn}")
-        print(f"Reward function: {args.reward_fn}")
         print(f"Total number of samples: {args.num_samples}")
         print(f"Number of GPUs: {accelerator.num_processes}")
         print(f"Total rounds: {total_rounds}")
@@ -113,17 +108,15 @@ def main():
                 output_type="pt",
             )
 
-        rewards = reward_fn(images, prompts, prompt_metadata)[0]
-
         # save images with rewards and prompts in file name
-        for i, (image, reward, prompt) in enumerate(zip(images, rewards, prompts)):
+        for i, (image, prompt) in enumerate(zip(images, prompts)):
             image = image.cpu().numpy().transpose(1, 2, 0)
             image = (image * 255).astype(np.uint8)
             image = Image.fromarray(image)
             image.save(
                 os.path.join(
                     args.output_dir,
-                    f"ID_{round}-{accelerator.process_index}-{i}_reward_{reward:.3f}_prompt_{prompt}.png",
+                    f"{round}-{accelerator.process_index}-{i}_{prompt}.png",
                 )
             )
         
