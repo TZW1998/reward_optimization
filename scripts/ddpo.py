@@ -24,6 +24,7 @@ from functools import partial
 import tqdm
 import tempfile
 from PIL import Image
+from copy import deepcopy
 
 tqdm = partial(tqdm.tqdm, dynamic_ncols=True)
 
@@ -118,7 +119,7 @@ def main(_):
         pipeline.unet.to(accelerator.device, dtype=inference_dtype)
 
     # clone the original unet so that we can compute the kl loss
-    pipeline.unet_orig = pipeline.unet.clone()
+    pipeline.unet_orig = deepcopy(pipeline.unet)
 
     if config.use_lora:
         # Set correct lora layers
