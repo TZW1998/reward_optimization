@@ -82,7 +82,7 @@ def main(_):
     )
     if accelerator.is_main_process:
         accelerator.init_trackers(
-            project_name="reward_opt-pytorch", config=config.to_dict(), init_kwargs={"wandb": {"name": f"{config.run_name}_{config.prompt_fn}_{config.reward_fn}"}}
+            project_name="reward_opt-pytorch", config=config.to_dict(), init_kwargs={"wandb": {"name": f"{config.run_name}_{config.prompt_fn}_{config.reward_fn}_{config.lora_rank}"}}
         )
     logger.info(f"\n{config}")
 
@@ -141,7 +141,7 @@ def main(_):
                 block_id = int(name[len("down_blocks.")])
                 hidden_size = pipeline.unet.config.block_out_channels[block_id]
 
-            lora_attn_procs[name] = LoRAAttnProcessor(hidden_size=hidden_size, cross_attention_dim=cross_attention_dim)
+            lora_attn_procs[name] = LoRAAttnProcessor(hidden_size=hidden_size, cross_attention_dim=cross_attention_dim, rank = config.lora_rank)
         pipeline.unet.set_attn_processor(lora_attn_procs)
 
         # this is a hack to synchronize gradients properly. the module that registers the parameters we care about (in
@@ -286,6 +286,10 @@ def main(_):
         first_epoch = int(config.resume_from.split("_")[-1]) + 1
     else:
         first_epoch = 0
+    
+    # start time for the main process
+    if accelerator.is_local_main_process:
+        start_time = time.time()
 
     for epoch in range(first_epoch, config.num_epochs):
         #################### SAMPLING (only for evaluate) ####################
@@ -314,7 +318,7 @@ def main(_):
 
             # sample
             with autocast():
-                images, _, _, _ = pipeline_with_logprob(
+                images, _, _, _, mean_kl_div = pipeline_with_logprob(
                     pipeline,
                     prompt_embeds=prompt_embeds,
                     negative_prompt_embeds=sample_neg_prompt_embeds,
@@ -332,6 +336,7 @@ def main(_):
             samples.append(
                 {
                     "rewards": rewards,
+                    "mean_kl_div": mean_kl_div,
                 }
             )
 
@@ -368,11 +373,22 @@ def main(_):
         # gather rewards across processes
         rewards = accelerator.gather(samples["rewards"]).cpu().numpy()
 
-        # log rewards and images
-        accelerator.log(
-            {"reward": rewards, "epoch": epoch, "reward_mean": rewards.mean(), "reward_std": rewards.std()},
-            step=epoch,
-        )
+        # compute the mean_kl_div across processes via reduces
+        reduced_mean_kl_div = accelerator.reduce(samples["mean_kl_div"].mean(), reduction="mean").item()
+
+        # compute rewards quantiles
+        use_quantiles = [0, 0.05, 0.1, 0.2, 0.5, 1.0]
+        quantiles = np.quantile(rewards, use_quantiles)
+
+        # log rewards and time at main process
+        if accelerator.is_local_main_process:
+            now_time = time.time() - start_time
+            log_dict = {"time": now_time, "reward": rewards, "reward_mean": rewards.mean(), "reward_std": rewards.std(), "mean_kl_div": reduced_mean_kl_div}
+            for q, v in zip(use_quantiles, quantiles):
+                log_dict[f"reward_q{q}"] = v
+            accelerator.log(log_dict,
+                step=epoch,
+            )
 
 
         #################### TRAINING ####################
