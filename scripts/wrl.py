@@ -460,7 +460,7 @@ def main(_):
             batch_rewards = batch["rewards"].to(accelerator.device, dtype=torch.float32)
 
             # compute the weights
-            reward_weights = reward2weight(batch_rewards)
+            reward_weights = reward2weight(batch_rewards, config)
 
             # backward pass for config.train.gradient_accumulation_steps times
             for now_acc_step in range(config.train.gradient_accumulation_steps):
@@ -472,7 +472,7 @@ def main(_):
 
                     #import ipdb; ipdb.set_trace()
 
-                    loss = (sample_loss * now_sub_batch_weights).mean()
+                    loss = (sample_loss * now_sub_batch_weights).sum() / total_train_batch_size
                     info["loss"].append(loss.item())
 
                     # backward pass
