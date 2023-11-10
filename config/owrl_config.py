@@ -9,14 +9,14 @@ def base():
 
     ###### General ######
     # run name for wandb logging and checkpoint saving -- if not provided, will be auto-generated based on the datetime.
-    config.run_name = "offline_wrl"
+    config.run_name = "online_wrl"
     # random seed for reproducibility.
     config.seed = 42
     # top-level logging directory for checkpoint saving.
     config.logdir = "logs"
     # number of epochs to train for. each epoch is one round of sampling from the model followed by training on those
     # samples.
-    config.num_epochs = 100
+    config.num_epochs = 30
     # number of epochs between saving model checkpoints.
     config.save_freq = 20
     # number of checkpoints to keep before overwriting old ones.
@@ -34,6 +34,7 @@ def base():
     # about 10GB of GPU memory. beware that if LoRA is disabled, training will take a lot of memory and saved checkpoint
     # files will also be large.
     config.use_lora = True
+    config.lora_rank = 1
 
     ###### Pretrained Model ######
     config.pretrained = pretrained = ml_collections.ConfigDict()
@@ -53,10 +54,10 @@ def base():
     # classifier-free guidance weight. 1.0 is no guidance.
     sample.guidance_scale = 5.0
     # batch size (per GPU!) to use for sampling.
-    sample.batch_size = 8
+    sample.batch_size = 4
     # number of batches to sample per epoch. the total number of samples per epoch is `num_batches_per_epoch *
     # batch_size * num_gpus`.
-    sample.num_batches_per_epoch = 16
+    sample.num_batches_per_epoch = 8
 
     ###### Training ######
     config.train = train = ml_collections.ConfigDict()
@@ -64,7 +65,7 @@ def base():
     # number of gradient steps per epoch. This means that at each epoch, it will load num_steps * batch_size * num_gpu * gradient_accumulation_steps samples
     train.num_steps_per_epoch = 85 
     # batch size (per GPU!) to use for training.
-    train.batch_size = 2
+    train.batch_size = 1
     # whether to use the 8bit Adam optimizer from bitsandbytes.
     train.use_8bit_adam = False
     # learning rate.
@@ -79,14 +80,15 @@ def base():
     train.adam_epsilon = 1e-8
     # number of gradient accumulation steps. the effective batch size is `batch_size * num_gpus *
     # gradient_accumulation_steps`.
-    train.gradient_accumulation_steps = 32
+    train.gradient_accumulation_steps = 16
     # maximum gradient norm for gradient clipping.
-    train.max_grad_norm = 100.0
+    train.max_grad_norm = 1.0
     # number of inner epochs per outer epoch. each inner epoch is one iteration through the current subset of offline datasets
     train.num_inner_epochs = 1
     # whether or not to use classifier-free guidance during training. if enabled, the same guidance scale used during
     # sampling will be used during training.
     train.cfg = True
+    train.temperatures = 0.2
 
     ###### Prompt Function (only for evaluate) ######
     # prompt function to use. see `prompts.py` for available prompt functions.

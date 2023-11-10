@@ -12,9 +12,8 @@ import json
 class ImageRewardDataset(Dataset):
     """dataset for (image, prompt, reward) triplets."""
 
-    def __init__(self, dataset_name, reward_data_name, tokenizer, threshold=0.0):
-        self.image_folder= OFFLINE_IMAGE_PATH[dataset_name]
-        reward_data_path = OFFLINE_REWARD_PATH[dataset_name][reward_data_name]
+    def __init__(self, image_folder, reward_data_path, tokenizer, threshold=0.0):
+        self.image_folder= image_folder
       
         with open(reward_data_path, "r") as f:
             self.reward_data = json.load(f)

@@ -26,19 +26,21 @@ from functools import partial
 import tqdm
 import tempfile
 from PIL import Image
+from copy import deepcopy
+from reward_opt.global_path import *
 
 tqdm = partial(tqdm.tqdm, dynamic_ncols=True)
 
 
 FLAGS = flags.FLAGS
-config_flags.DEFINE_config_file("config", "config/wrl_config.py", "Training configuration.")
+config_flags.DEFINE_config_file("config", "config/owrl_config.py", "Training configuration.")
 
 logger = get_logger(__name__)
 
 ### MODIFY THIS: Decide how to compute weights using reward, here is one choice
-def reward2weight(rewards):
+def reward2weight(rewards, config):
     # give 1 if reward > -70, otherwise give 0
-    temperatures = 0.2
+    temperatures = config.train.temperatures
     weights = torch.exp((rewards - 1) / temperatures)
     return weights
 
@@ -82,7 +84,7 @@ def main(_):
     )
     if accelerator.is_main_process:
         accelerator.init_trackers(
-            project_name="reward_opt-pytorch", config=config.to_dict(), init_kwargs={"wandb": {"name": f"{config.run_name}_{config.prompt_fn}_{config.reward_fn}"}}
+            project_name="reward_opt-pytorch", config=config.to_dict(), init_kwargs={"wandb": {"name": f"{config.run_name}_{config.prompt_fn}_{config.reward_fn}_{config.lora_rank}"}}
         )
     logger.info(f"\n{config}")
 
@@ -125,6 +127,9 @@ def main(_):
     if config.use_lora:
         pipeline.unet.to(accelerator.device, dtype=inference_dtype)
 
+    # clone the original unet so that we can compute the kl loss
+    pipeline.unet_orig = deepcopy(pipeline.unet)
+
     if config.use_lora:
         # Set correct lora layers
         lora_attn_procs = {}
@@ -141,7 +146,7 @@ def main(_):
                 block_id = int(name[len("down_blocks.")])
                 hidden_size = pipeline.unet.config.block_out_channels[block_id]
 
-            lora_attn_procs[name] = LoRAAttnProcessor(hidden_size=hidden_size, cross_attention_dim=cross_attention_dim)
+            lora_attn_procs[name] = LoRAAttnProcessor(hidden_size=hidden_size, cross_attention_dim=cross_attention_dim, rank = config.lora_rank)
         pipeline.unet.set_attn_processor(lora_attn_procs)
 
         # this is a hack to synchronize gradients properly. the module that registers the parameters we care about (in
@@ -247,7 +252,9 @@ def main(_):
         rewards = torch.stack([example["rewards"] for example in examples])
         return {"pixel_values": pixel_values, "input_ids": input_ids, "rewards": rewards}
 
-    offline_dataset = ImageRewardDataset(config.prompt_fn, config.reward_fn, pipeline.tokenizer)
+    image_folder= OFFLINE_IMAGE_PATH[config.prompt_fn]
+    reward_data_path = OFFLINE_REWARD_PATH[config.prompt_fn][config.reward_fn]
+    offline_dataset = ImageRewardDataset(image_folder, reward_data_path, pipeline.tokenizer)
 
     actual_batch_size_per_device = config.train.batch_size * config.train.gradient_accumulation_steps
     offline_dataloader = torch.utils.data.DataLoader(offline_dataset,
@@ -286,6 +293,10 @@ def main(_):
         first_epoch = int(config.resume_from.split("_")[-1]) + 1
     else:
         first_epoch = 0
+    
+    # start time for the main process
+    if accelerator.is_local_main_process:
+        start_time = time.time()
 
     for epoch in range(first_epoch, config.num_epochs):
         #################### SAMPLING (only for evaluate) ####################
@@ -314,7 +325,7 @@ def main(_):
 
             # sample
             with autocast():
-                images, _, _, _ = pipeline_with_logprob(
+                images, _, _, _, mean_kl_div = pipeline_with_logprob(
                     pipeline,
                     prompt_embeds=prompt_embeds,
                     negative_prompt_embeds=sample_neg_prompt_embeds,
@@ -332,6 +343,7 @@ def main(_):
             samples.append(
                 {
                     "rewards": rewards,
+                    "mean_kl_div": mean_kl_div,
                 }
             )
 
@@ -368,11 +380,22 @@ def main(_):
         # gather rewards across processes
         rewards = accelerator.gather(samples["rewards"]).cpu().numpy()
 
-        # log rewards and images
-        accelerator.log(
-            {"reward": rewards, "epoch": epoch, "reward_mean": rewards.mean(), "reward_std": rewards.std()},
-            step=epoch,
-        )
+        # compute the mean_kl_div across processes via reduces
+        reduced_mean_kl_div = accelerator.reduce(samples["mean_kl_div"].mean(), reduction="mean").item()
+
+        # compute rewards quantiles
+        use_quantiles = [0, 0.05, 0.1, 0.2, 0.5, 1.0]
+        quantiles = np.quantile(rewards, use_quantiles)
+
+        # log rewards and time at main process
+        if accelerator.is_local_main_process:
+            now_time = time.time() - start_time
+            log_dict = {"time": now_time, "reward": rewards, "reward_mean": rewards.mean(), "reward_std": rewards.std(), "mean_kl_div": reduced_mean_kl_div}
+            for q, v in zip(use_quantiles, quantiles):
+                log_dict[f"reward_q{q}"] = v
+            accelerator.log(log_dict,
+                step=epoch,
+            )
 
 
         #################### TRAINING ####################
@@ -422,7 +445,7 @@ def main(_):
         # main training loop, execute num_steps_per_epoch * gradient_accumulation_steps times backpropogation
         data_iterable = iter(offline_dataloader)
         pipeline.unet.train()
-        info = defaultdict(list)
+
 
         for step in tqdm(range(config.train.num_steps_per_epoch),
             desc=f"Epoch {epoch}: training",
@@ -440,7 +463,7 @@ def main(_):
             batch_rewards = batch["rewards"].to(accelerator.device, dtype=torch.float32)
 
             # compute the weights
-            reward_weights = reward2weight(batch_rewards)
+            reward_weights = reward2weight(batch_rewards, config)
 
             # backward pass for config.train.gradient_accumulation_steps times
             for now_acc_step in range(config.train.gradient_accumulation_steps):
@@ -452,8 +475,8 @@ def main(_):
 
                     #import ipdb; ipdb.set_trace()
 
-                    loss = (sample_loss * now_sub_batch_weights).mean()
-                    info["loss"].append(loss)
+                    loss = (sample_loss * now_sub_batch_weights).sum() / total_train_batch_size
+                
 
                     # backward pass
                     accelerator.backward(loss)
@@ -466,10 +489,7 @@ def main(_):
 
             # make sure we did an optimization step at the end of every batch
             assert accelerator.sync_gradients
-            info = {k: torch.mean(torch.stack(v)) for k, v in info.items()}
-            info = accelerator.reduce(info, reduction="mean")
-            info.update({"epoch": epoch, "step": step})
-            info = defaultdict(list)
+   
 
         # ToDo: this save_state causes some bugs, don't know why
         #if epoch != 0 and epoch % config.save_freq == 0 and accelerator.is_main_process:
