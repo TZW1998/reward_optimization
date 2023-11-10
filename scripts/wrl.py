@@ -37,9 +37,9 @@ config_flags.DEFINE_config_file("config", "config/wrl_config.py", "Training conf
 logger = get_logger(__name__)
 
 ### MODIFY THIS: Decide how to compute weights using reward, here is one choice
-def reward2weight(rewards):
+def reward2weight(rewards, config):
     # give 1 if reward > -70, otherwise give 0
-    temperatures = 0.2
+    temperatures = config.train.temperatures
     weights = torch.exp((rewards - 1) / temperatures)
     return weights
 
@@ -473,7 +473,7 @@ def main(_):
                     #import ipdb; ipdb.set_trace()
 
                     loss = (sample_loss * now_sub_batch_weights).mean()
-                    info["loss"].append(loss)
+                    info["loss"].append(loss.item())
 
                     # backward pass
                     accelerator.backward(loss)

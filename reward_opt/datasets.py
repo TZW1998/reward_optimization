@@ -12,7 +12,7 @@ import json
 class ImageRewardDataset(Dataset):
     """dataset for (image, prompt, reward) triplets."""
 
-    def __init__(self, dataset_name, reward_data_name, tokenizer):
+    def __init__(self, dataset_name, reward_data_name, tokenizer, threshold=0.0):
         self.image_folder= OFFLINE_IMAGE_PATH[dataset_name]
         reward_data_path = OFFLINE_REWARD_PATH[dataset_name][reward_data_name]
       
@@ -31,8 +31,8 @@ class ImageRewardDataset(Dataset):
         self.reward_min = min(self.reward_list)
 
         # only finetune on the top 10% of data with highest reward
-        threshold = np.percentile(self.reward_list, 90)
-        self.filtered_images_name_list = self.images_name_list # [img for img in self.images_name_list if self.reward_data[img] >= threshold]
+        threshold = np.percentile(self.reward_list, threshold*100)
+        self.filtered_images_name_list = [img for img in self.images_name_list if self.reward_data[img] >= threshold]
 
 
     def __len__(self):
