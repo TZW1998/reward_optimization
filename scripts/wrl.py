@@ -442,7 +442,7 @@ def main(_):
         # main training loop, execute num_steps_per_epoch * gradient_accumulation_steps times backpropogation
         data_iterable = iter(offline_dataloader)
         pipeline.unet.train()
-        info = defaultdict(list)
+
 
         for step in tqdm(range(config.train.num_steps_per_epoch),
             desc=f"Epoch {epoch}: training",
@@ -473,7 +473,7 @@ def main(_):
                     #import ipdb; ipdb.set_trace()
 
                     loss = (sample_loss * now_sub_batch_weights).sum() / total_train_batch_size
-                    info["loss"].append(loss.item())
+                
 
                     # backward pass
                     accelerator.backward(loss)
@@ -486,10 +486,7 @@ def main(_):
 
             # make sure we did an optimization step at the end of every batch
             assert accelerator.sync_gradients
-            info = {k: torch.mean(torch.stack(v)) for k, v in info.items()}
-            info = accelerator.reduce(info, reduction="mean")
-            info.update({"epoch": epoch, "step": step})
-            info = defaultdict(list)
+   
 
         # ToDo: this save_state causes some bugs, don't know why
         #if epoch != 0 and epoch % config.save_freq == 0 and accelerator.is_main_process:
