@@ -139,7 +139,7 @@ def online_data_generation(pipeline, prompt_fn, reward_fn, config, accelerator, 
             image = (image * 255).astype(np.uint8)
             image = Image.fromarray(image)
             image.save(img_path)
-            img_score[img] = rewards[i]
+            img_score[img] = rewards[i].item()
 
     with open(temp_reward_data_path, "w") as f:
         json.dump(img_score, f)
