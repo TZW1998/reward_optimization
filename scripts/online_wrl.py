@@ -290,12 +290,6 @@ def main(_):
     temp_image_folder= "temp_image_folder"
     temp_reward_data_path = "temp_reward_data.json"
 
-    # remove the temp folder and temp reward data json file if exists
-    if os.path.exists(temp_image_folder):
-        shutil.rmtree(temp_image_folder)
-    if os.path.exists(temp_reward_data_path):
-        os.remove(temp_reward_data_path)
-
     for epoch in range(first_epoch, config.num_epochs):
         #################### SAMPLING (only for evaluate) ####################
         pipeline.unet.eval()

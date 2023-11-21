@@ -17,6 +17,8 @@ accelerate launch --num_processes=2 scripts/offline_sampling.py --num_samples 25
 ## Running RWR
 accelerate launch --num_processes=2  scripts/wrl.py --config config/wrl_config.py:aesthetic &
 
+accelerate launch --num_processes=2  scripts/online_wrl.py --config config/owrl_config.py:aesthetic 
+
 ## Running RCG
 
 

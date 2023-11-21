@@ -68,6 +68,15 @@ class ImageRewardDataset(Dataset):
 
 def online_data_generation(pipeline, prompt_fn, reward_fn, config, accelerator, temp_image_folder, temp_reward_data_path):
 
+    # remove the temp folder and temp reward data json file if exists
+    if os.path.exists(temp_image_folder):
+        shutil.rmtree(temp_image_folder)
+    if os.path.exists(temp_reward_data_path):
+        os.remove(temp_reward_data_path)
+
+    # re-create the new temp folder
+    os.makedirs(temp_image_folder)
+
     total_rounds = config.train.data_size // (config.sample.batch_size * accelerator.num_processes)
 
     neg_prompt_embed = pipeline.text_encoder(
