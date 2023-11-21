@@ -288,13 +288,11 @@ def main(_):
         start_time = time.time()
 
     # generate a global random number at main process and brocast to all processes
-    if accelerator.is_local_main_process:
-        rand_id = torch.randint(0, 1000000, (1,)).item()
-    
-    rand_id = accelerator.broadcast(rand_id, src=0)
+    time_id = torch.tensor([time.time()]).to(accelerator.device)
+    torch.distributed.broadcast(time_id, src=0)
 
-    temp_image_folder= f"temp_image_folder_{rand_id}"
-    temp_reward_data_path = f"temp_reward_data_{rand_id}.json"
+    temp_image_folder= f"temp_image_folder_{time_id.item()}"
+    temp_reward_data_path = f"temp_reward_data_{time_id.item()}.json"
 
     for epoch in range(first_epoch, config.num_epochs):
         #################### SAMPLING (only for evaluate) ####################
