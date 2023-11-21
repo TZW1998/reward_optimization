@@ -287,8 +287,8 @@ def main(_):
     if accelerator.is_local_main_process:
         start_time = time.time()
 
-    temp_image_folder= "temp_image_folder"
-    temp_reward_data_path = "temp_reward_data.json"
+    temp_image_folder= f"temp_image_folder_{unique_id}"
+    temp_reward_data_path = f"temp_reward_data_{unique_id}.json"
 
     for epoch in range(first_epoch, config.num_epochs):
         #################### SAMPLING (only for evaluate) ####################
