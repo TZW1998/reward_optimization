@@ -470,7 +470,7 @@ def main(_):
             try:
                 batch = next(data_iterable)
             except:
-                data_iterable = iter(offline_dataloader)
+                data_iterable = iter(dataloader)
                 batch = next(data_iterable)
 
             # batch weights
