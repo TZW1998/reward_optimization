@@ -90,7 +90,7 @@ def base():
     train.cfg = True
     train.temperatures = 0.2
     train.data_epoch = 10 # update the dataset every 10 epochs
-    train.data_size = 16 # number of samples to use for each dataset
+    train.data_size = 32 # number of samples to use for each dataset
     train.filter_threshold = 0.0 # the threshold to filter the samples
 
     ###### Prompt Function (only for evaluate) ######

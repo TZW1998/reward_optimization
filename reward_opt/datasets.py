@@ -82,6 +82,9 @@ def online_data_generation(pipeline, prompt_fn, reward_fn, config, accelerator, 
 
     total_rounds = config.train.data_size // (config.sample.batch_size * accelerator.num_processes)
 
+    assert total_rounds >= 1
+    assert config.train.data_size % (config.sample.batch_size * accelerator.num_processes) == 0
+
     neg_prompt_embed = pipeline.text_encoder(
         pipeline.tokenizer(
             [""],
@@ -95,7 +98,7 @@ def online_data_generation(pipeline, prompt_fn, reward_fn, config, accelerator, 
 
     img_score = {}
     # start sampling
-    for round in tqdm.trange(total_rounds, desc="generation round",
+    for rd in tqdm.trange(total_rounds, desc="generation round",
             disable=not accelerator.is_local_main_process):
         # generate prompts
         prompts, prompt_metadata = zip(
@@ -112,24 +115,23 @@ def online_data_generation(pipeline, prompt_fn, reward_fn, config, accelerator, 
         ).input_ids.to(accelerator.device)
         prompt_embeds = pipeline.text_encoder(prompt_ids)[0]
 
-        # sample
-        with torch.no_grad():
-            images, _, _, _ = pipeline_with_logprob(
-                pipeline,
-                prompt_embeds=prompt_embeds,
-                negative_prompt_embeds=sample_neg_prompt_embeds,
-                num_inference_steps=50,
-                guidance_scale=5,
-                eta=1,
-                output_type="pt",
-                compute_kl=False,
-            )
+        # sample     
+        images, _, _, _ = pipeline_with_logprob(
+            pipeline,
+            prompt_embeds=prompt_embeds,
+            negative_prompt_embeds=sample_neg_prompt_embeds,
+            num_inference_steps=50,
+            guidance_scale=5,
+            eta=1,
+            output_type="pt",
+            compute_kl=False,
+        )
 
         rewards, _ = reward_fn(images, prompts, prompt_metadata)
         # save images with rewards and prompts in file name
         for i, (image, prompt) in enumerate(zip(images, prompts)):
             
-            img = f"{round}-{accelerator.process_index}-{i}_{prompt}.png"
+            img = f"{rd}-{accelerator.process_index}-{i}_{prompt}.png"
             img_path = os.path.join(
                     temp_image_folder,
                     img,
@@ -141,5 +143,20 @@ def online_data_generation(pipeline, prompt_fn, reward_fn, config, accelerator, 
             image.save(img_path)
             img_score[img] = rewards[i].item()
 
-    with open(temp_reward_data_path, "w") as f:
+    # save each img_score separately
+    with open(f"{accelerator.process_index}_{temp_reward_data_path}", "w") as f:
         json.dump(img_score, f)
+    accelerator.wait_for_everyone()
+
+    # merge all the img_score json files
+    if accelerator.is_local_main_process:
+        img_score = {}
+        for i in range(accelerator.num_processes):
+            with open(f"{i}_{temp_reward_data_path}", "r") as f:
+                img_score.update(json.load(f))
+            os.remove(f"{i}_{temp_reward_data_path}")
+        with open(temp_reward_data_path, "w") as f:
+            json.dump(img_score, f)
+
+    accelerator.wait_for_everyone()
+      
