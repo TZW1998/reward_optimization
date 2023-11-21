@@ -1,6 +1,6 @@
 from collections import defaultdict
 import contextlib
-import os
+import os, shutil
 import datetime
 from concurrent import futures
 import time
@@ -15,7 +15,7 @@ from diffusers.models.attention_processor import LoRAAttnProcessor
 import numpy as np
 import reward_opt.prompts
 import reward_opt.rewards
-from reward_opt.datasets import ImageRewardDataset
+from reward_opt.datasets import ImageRewardDataset, online_data_generation
 from reward_opt.stat_tracking import PerPromptStatTracker
 from reward_opt.diffusers_patch.pipeline_with_logprob import pipeline_with_logprob
 from reward_opt.diffusers_patch.ddim_with_logprob import ddim_step_with_logprob
@@ -252,21 +252,10 @@ def main(_):
         rewards = torch.stack([example["rewards"] for example in examples])
         return {"pixel_values": pixel_values, "input_ids": input_ids, "rewards": rewards}
 
-    image_folder= OFFLINE_IMAGE_PATH[config.prompt_fn]
-    reward_data_path = OFFLINE_REWARD_PATH[config.prompt_fn][config.reward_fn]
-    offline_dataset = ImageRewardDataset(image_folder, reward_data_path, pipeline.tokenizer)
-
     actual_batch_size_per_device = config.train.batch_size * config.train.gradient_accumulation_steps
-    offline_dataloader = torch.utils.data.DataLoader(offline_dataset,
-                                                        shuffle=True,
-                                                        collate_fn=collate_fn,
-                                                        batch_size=actual_batch_size_per_device,
-                                                        num_workers=2,
-                                                    )
-
 
     # Prepare everything with our `accelerator`.
-    unet, optimizer, offline_dataloader = accelerator.prepare(unet, optimizer, offline_dataloader)
+    unet, optimizer = accelerator.prepare(unet, optimizer)
 
     # executor to perform callbacks asynchronously. this is beneficial for the llava callbacks which makes a request to a
     # remote server running llava inference.
@@ -297,6 +286,15 @@ def main(_):
     # start time for the main process
     if accelerator.is_local_main_process:
         start_time = time.time()
+
+    temp_image_folder= "temp_image_folder"
+    temp_reward_data_path = "temp_reward_data.json"
+
+    # remove the temp folder and temp reward data json file if exists
+    if os.path.exists(temp_image_folder):
+        shutil.rmtree(temp_image_folder)
+    if os.path.exists(temp_reward_data_path):
+        os.remove(temp_reward_data_path)
 
     for epoch in range(first_epoch, config.num_epochs):
         #################### SAMPLING (only for evaluate) ####################
@@ -442,8 +440,30 @@ def main(_):
 
             return sample_loss
         
+
+        # collect the dataset used for training for every config.train.data_epoch 
+        if epoch % config.train.data_epoch == 0:
+            logger.info(f"start updating online dataset at epoch {epoch}")
+            logger.info(f"Prompt function: {config.prompt_fn}")
+            logger.info(f"Total number of samples: {config.train.data_size}")
+            logger.info(f"Number of GPUs: {accelerator.num_processes}")
+
+            online_data_generation(pipeline, prompt_fn, reward_fn, config, accelerator, temp_image_folder, temp_reward_data_path)
+
+            logger.info(f"online dataset updated at epoch {epoch} finished")
+
+            online_dataset = ImageRewardDataset(temp_image_folder, temp_reward_data_path, pipeline.tokenizer, , threshold=config.train.filter_threshold)
+            dataloader = torch.utils.data.DataLoader(online_dataset,
+                                                                shuffle=True,
+                                                                collate_fn=collate_fn,
+                                                                batch_size=actual_batch_size_per_device,
+                                                                num_workers=2,
+                                                            )
+            dataloader = accelerator.prepare(dataloader)
+            
+
         # main training loop, execute num_steps_per_epoch * gradient_accumulation_steps times backpropogation
-        data_iterable = iter(offline_dataloader)
+        data_iterable = iter(dataloader)
         pipeline.unet.train()
 
 

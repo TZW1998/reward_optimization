@@ -251,7 +251,7 @@ def main(_):
         rewards = torch.stack([example["rewards"] for example in examples])
         return {"pixel_values": pixel_values, "input_ids": input_ids, "rewards": rewards}
 
-    offline_dataset = ImageRewardDataset(config.prompt_fn, config.reward_fn, pipeline.tokenizer)
+    offline_dataset = ImageRewardDataset(config.prompt_fn, config.reward_fn, pipeline.tokenizer, threshold=config.train.filter_threshold)
 
     actual_batch_size_per_device = config.train.batch_size * config.train.gradient_accumulation_steps
     offline_dataloader = torch.utils.data.DataLoader(offline_dataset,

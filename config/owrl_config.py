@@ -89,6 +89,9 @@ def base():
     # sampling will be used during training.
     train.cfg = True
     train.temperatures = 0.2
+    train.data_epoch = 10 # update the dataset every 10 epochs
+    train.data_size = 2560 # number of samples to use for each dataset
+    train.filter_threshold = 0.0 # the threshold to filter the samples
 
     ###### Prompt Function (only for evaluate) ######
     # prompt function to use. see `prompts.py` for available prompt functions.

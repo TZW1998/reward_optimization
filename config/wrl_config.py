@@ -89,6 +89,7 @@ def base():
     # sampling will be used during training.
     train.cfg = True
     train.temperatures = 0.2
+    train.filter_threshold = 0.0 # the threshold to filter the samples
 
     ###### Prompt Function (only for evaluate) ######
     # prompt function to use. see `prompts.py` for available prompt functions.

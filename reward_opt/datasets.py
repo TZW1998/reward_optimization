@@ -7,6 +7,8 @@ from PIL import Image
 from importlib import resources
 from reward_opt.global_path import *
 import json
+import tqdm
+from reward_opt.diffusers_patch.pipeline_with_logprob import pipeline_with_logprob
 
 # A customize dataset class for loading offline training data from a given folder of dataset
 class ImageRewardDataset(Dataset):
@@ -62,3 +64,58 @@ class ImageRewardDataset(Dataset):
         sample = {"pixel_values": image, "input_ids": input_id, "rewards": reward}
 
         return sample
+
+
+def online_data_generation(pipeline, prompt_fn, reward_fn, config, accelerator, temp_image_folder, temp_reward_data_path):
+
+    total_rounds = config.train.data_size // (config.sample.batch_size * accelerator.num_processes)
+
+    img_score = {}
+    # start sampling
+    for round in tqdm.trange(total_rounds, desc="generation round",
+            disable=not accelerator.is_local_main_process):
+        # generate prompts
+        prompts, prompt_metadata = zip(
+            *[prompt_fn() for _ in range(config.sample.batch_size)]
+        )
+
+        # encode prompts
+        prompt_ids = pipeline.tokenizer(
+            prompts,
+            return_tensors="pt",
+            padding="max_length",
+            truncation=True,
+            max_length=pipeline.tokenizer.model_max_length,
+        ).input_ids.to(accelerator.device)
+        prompt_embeds = pipeline.text_encoder(prompt_ids)[0]
+
+        # sample
+        with torch.no_grad():
+            images, _, _, _ = pipeline_with_logprob(
+                pipeline,
+                prompt_embeds=prompt_embeds,
+                negative_prompt_embeds=sample_neg_prompt_embeds,
+                num_inference_steps=50,
+                guidance_scale=5,
+                eta=1,
+                output_type="pt",
+            )
+
+        rewards = reward_fn(images, prompts, prompt_metadata)
+        # save images with rewards and prompts in file name
+        for i, (image, prompt) in enumerate(zip(images, prompts)):
+            
+            img = f"{round}-{accelerator.process_index}-{i}_{prompt}.png"
+            img_path = os.path.join(
+                    temp_image_folder,
+                    img,
+                )
+
+            image = image.cpu().numpy().transpose(1, 2, 0)
+            image = (image * 255).astype(np.uint8)
+            image = Image.fromarray(image)
+            image.save(img_path)
+            img_score[img] = rewards[i]
+
+    with open(temp_reward_data_path, "w") as f:
+        json.dump(img_score, f)
