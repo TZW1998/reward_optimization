@@ -452,7 +452,7 @@ def main(_):
 
             logger.info(f"online dataset updated at epoch {epoch} finished")
 
-            online_dataset = ImageRewardDataset(temp_image_folder, temp_reward_data_path, pipeline.tokenizer, , threshold=config.train.filter_threshold)
+            online_dataset = ImageRewardDataset(temp_image_folder, temp_reward_data_path, pipeline.tokenizer, threshold=config.train.filter_threshold)
             dataloader = torch.utils.data.DataLoader(online_dataset,
                                                                 shuffle=True,
                                                                 collate_fn=collate_fn,
