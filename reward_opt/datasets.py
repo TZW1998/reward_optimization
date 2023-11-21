@@ -125,7 +125,7 @@ def online_data_generation(pipeline, prompt_fn, reward_fn, config, accelerator, 
                 compute_kl=False,
             )
 
-        rewards = reward_fn(images, prompts, prompt_metadata)
+        rewards, _ = reward_fn(images, prompts, prompt_metadata)
         # save images with rewards and prompts in file name
         for i, (image, prompt) in enumerate(zip(images, prompts)):
             
