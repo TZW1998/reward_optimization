@@ -288,7 +288,7 @@ def main(_):
         start_time = time.time()
 
     # generate a global random number at main process and brocast to all processes
-    time_id = torch.tensor([time.time()]).to(accelerator.device)
+    time_id = torch.tensor(time.time()).to(accelerator.device)
     torch.distributed.broadcast(time_id, src=0)
 
     temp_image_folder= f"temp_image_folder_{time_id.item()}"
