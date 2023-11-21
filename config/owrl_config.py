@@ -57,7 +57,7 @@ def base():
     sample.batch_size = 4
     # number of batches to sample per epoch. the total number of samples per epoch is `num_batches_per_epoch *
     # batch_size * num_gpus`.
-    sample.num_batches_per_epoch = 1
+    sample.num_batches_per_epoch = 8
 
     ###### Training ######
     config.train = train = ml_collections.ConfigDict()
@@ -80,7 +80,7 @@ def base():
     train.adam_epsilon = 1e-8
     # number of gradient accumulation steps. the effective batch size is `batch_size * num_gpus *
     # gradient_accumulation_steps`.
-    train.gradient_accumulation_steps = 1
+    train.gradient_accumulation_steps = 16
     # maximum gradient norm for gradient clipping.
     train.max_grad_norm = 1.0
     # number of inner epochs per outer epoch. each inner epoch is one iteration through the current subset of offline datasets
@@ -89,8 +89,8 @@ def base():
     # sampling will be used during training.
     train.cfg = True
     train.temperatures = 0.2
-    train.data_epoch = 10 # update the dataset every 10 epochs
-    train.data_size = 32 # number of samples to use for each dataset
+    train.data_epoch = 5 # update the dataset every 5 epochs
+    train.data_size = 1280 # number of samples to use for each dataset
     train.filter_threshold = 0.0 # the threshold to filter the samples
 
     ###### Prompt Function (only for evaluate) ######
