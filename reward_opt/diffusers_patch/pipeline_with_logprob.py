@@ -36,6 +36,7 @@ def pipeline_with_logprob(
     callback_steps: int = 1,
     cross_attention_kwargs: Optional[Dict[str, Any]] = None,
     guidance_rescale: float = 0.0,
+    compute_kl: bool = True,
 ):
     r"""
     Function invoked when calling the pipeline for generation.
@@ -169,7 +170,8 @@ def pipeline_with_logprob(
     num_warmup_steps = len(timesteps) - num_inference_steps * self.scheduler.order
     all_latents = [latents]
     all_log_probs = []
-    mean_kl_div = torch.zeros(latents.shape[0], device=latents.device)
+    if compute_kl:
+        mean_kl_div = torch.zeros(latents.shape[0], device=latents.device)
     with self.progress_bar(total=num_inference_steps) as progress_bar:
         for i, t in enumerate(timesteps):
             # expand the latents if we are doing classifier free guidance
@@ -186,37 +188,44 @@ def pipeline_with_logprob(
             )[0]
 
             # predict the noise residual with original unet
-            noise_pred_orig = self.unet_orig(
-                latent_model_input,
-                t,
-                encoder_hidden_states=prompt_embeds,
-                cross_attention_kwargs=cross_attention_kwargs,
-                return_dict=False,
-            )[0]
+            if compute_kl:
+                noise_pred_orig = self.unet_orig(
+                    latent_model_input,
+                    t,
+                    encoder_hidden_states=prompt_embeds,
+                    cross_attention_kwargs=cross_attention_kwargs,
+                    return_dict=False,
+                )[0]
 
             # perform guidance
             if do_classifier_free_guidance:
                 noise_pred_uncond, noise_pred_text = noise_pred.chunk(2)
                 noise_pred = noise_pred_uncond + guidance_scale * (noise_pred_text - noise_pred_uncond)
 
-                # for original unet
-                noise_pred_uncond_orig, noise_pred_text_orig = noise_pred_orig.chunk(2)
-                noise_pred_orig = noise_pred_uncond_orig + guidance_scale * (noise_pred_text_orig - noise_pred_uncond_orig)
+                if compute_kl:
+                    # for original unet
+                    noise_pred_uncond_orig, noise_pred_text_orig = noise_pred_orig.chunk(2)
+                    noise_pred_orig = noise_pred_uncond_orig + guidance_scale * (noise_pred_text_orig - noise_pred_uncond_orig)
 
             if do_classifier_free_guidance and guidance_rescale > 0.0:
                 # Based on 3.4. in https://arxiv.org/pdf/2305.08891.pdf
                 noise_pred = rescale_noise_cfg(noise_pred, noise_pred_text, guidance_rescale=guidance_rescale)
 
-                # for original unet
-                noise_pred_orig = rescale_noise_cfg(noise_pred_orig, noise_pred_text_orig, guidance_rescale=guidance_rescale)
+                if compute_kl:
+                    # for original unet
+                    noise_pred_orig = rescale_noise_cfg(noise_pred_orig, noise_pred_text_orig, guidance_rescale=guidance_rescale)
 
             # compute the previous noisy sample x_t -> x_t-1
-            latents, log_prob, kl_div = ddim_step_with_logprob(self.scheduler, noise_pred, t, latents, **extra_step_kwargs, ref_model_output = noise_pred_orig)
+            if compute_kl:
+                latents, log_prob, kl_div = ddim_step_with_logprob(self.scheduler, noise_pred, t, latents, **extra_step_kwargs, ref_model_output = noise_pred_orig)
+            else:
+                latents, log_prob= ddim_step_with_logprob(self.scheduler, noise_pred, t, latents, **extra_step_kwargs)
 
             # for original unet
             all_latents.append(latents)
             all_log_probs.append(log_prob)
-            mean_kl_div += kl_div
+            if compute_kl:
+                mean_kl_div += kl_div
 
             # call the callback, if provided
             if i == len(timesteps) - 1 or ((i + 1) > num_warmup_steps and (i + 1) % self.scheduler.order == 0):
@@ -242,4 +251,7 @@ def pipeline_with_logprob(
     if hasattr(self, "final_offload_hook") and self.final_offload_hook is not None:
         self.final_offload_hook.offload()
 
-    return image, has_nsfw_concept, all_latents, all_log_probs, mean_kl_div
+    if compute_kl:
+        return image, has_nsfw_concept, all_latents, all_log_probs, mean_kl_div
+    else:
+        return image, has_nsfw_concept, all_latents, all_log_probs

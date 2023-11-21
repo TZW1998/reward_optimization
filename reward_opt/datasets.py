@@ -70,6 +70,17 @@ def online_data_generation(pipeline, prompt_fn, reward_fn, config, accelerator, 
 
     total_rounds = config.train.data_size // (config.sample.batch_size * accelerator.num_processes)
 
+    neg_prompt_embed = pipeline.text_encoder(
+        pipeline.tokenizer(
+            [""],
+            return_tensors="pt",
+            padding="max_length",
+            truncation=True,
+            max_length=pipeline.tokenizer.model_max_length,
+        ).input_ids.to(accelerator.device)
+    )[0]
+    sample_neg_prompt_embeds = neg_prompt_embed.repeat(config.sample.batch_size, 1, 1)
+
     img_score = {}
     # start sampling
     for round in tqdm.trange(total_rounds, desc="generation round",
@@ -99,6 +110,7 @@ def online_data_generation(pipeline, prompt_fn, reward_fn, config, accelerator, 
                 guidance_scale=5,
                 eta=1,
                 output_type="pt",
+                compute_kl=False,
             )
 
         rewards = reward_fn(images, prompts, prompt_metadata)
