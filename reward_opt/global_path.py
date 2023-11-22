@@ -31,6 +31,6 @@ OFFLINE_IMAGE_PATH = {
 OFFLINE_REWARD_PATH = {
     "simple_animals": {
         "aesthetic_score": "/mnt/workspace/workgroup/tangzhiwei.tzw/simple_animals_data_aesthetic_score.json",
-        "jpeg_compressibility" : "/mnt/workspace/workgroup/tangzhiwei.tzw/simple_animals_jpeg_data_compressibility.json",
+        "jpeg_compressibility" : "/mnt/workspace/workgroup/tangzhiwei.tzw/simple_animals_data_jpeg_compressibility.json",
     }
 }
