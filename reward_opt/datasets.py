@@ -6,7 +6,6 @@ from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms, utils
 from PIL import Image
 from importlib import resources
-from reward_opt.global_path import *
 import json
 import tqdm
 from reward_opt.diffusers_patch.pipeline_with_logprob import pipeline_with_logprob

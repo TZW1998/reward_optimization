@@ -27,6 +27,7 @@ import tqdm
 import tempfile
 from PIL import Image
 from copy import deepcopy
+from reward_opt.global_path import *
 
 tqdm = partial(tqdm.tqdm, dynamic_ncols=True)
 
@@ -251,7 +252,10 @@ def main(_):
         rewards = torch.stack([example["rewards"] for example in examples])
         return {"pixel_values": pixel_values, "input_ids": input_ids, "rewards": rewards}
 
-    offline_dataset = ImageRewardDataset(config.prompt_fn, config.reward_fn, pipeline.tokenizer, threshold=config.train.filter_threshold)
+    offline_img_path = OFFLINE_IMAGE_PATH[config.prompt_fn]
+    offline_rw_path = OFFLINE_REWARD_PATH[config.prompt_fn][config.reward_fn]
+
+    offline_dataset = ImageRewardDataset(offline_img_path, offline_rw_path, pipeline.tokenizer, threshold=config.train.filter_threshold)
 
     actual_batch_size_per_device = config.train.batch_size * config.train.gradient_accumulation_steps
     offline_dataloader = torch.utils.data.DataLoader(offline_dataset,
