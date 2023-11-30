@@ -41,8 +41,7 @@ logger = get_logger(__name__)
 def reward2weight(rewards, config):
     # give 1 if reward > -70, otherwise give 0
     temperatures = config.train.temperatures
-    offset = config.train.reward_offset
-    weights = torch.exp((rewards - offset) / temperatures)
+    weights = torch.exp((rewards - 1) / temperatures)
     return weights
 
 

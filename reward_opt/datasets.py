@@ -14,7 +14,7 @@ from reward_opt.diffusers_patch.pipeline_with_logprob import pipeline_with_logpr
 class ImageRewardDataset(Dataset):
     """dataset for (image, prompt, reward) triplets."""
 
-    def __init__(self, image_folder, reward_data_path, tokenizer, threshold=0.0):
+    def __init__(self, image_folder, reward_data_path, tokenizer, threshold=0.0, normalize = False):
         self.image_folder= image_folder
       
         with open(reward_data_path, "r") as f:
@@ -30,6 +30,7 @@ class ImageRewardDataset(Dataset):
         self.reward_list = list(self.reward_data.values()) # used for query reward statistics
         self.reward_max = max(self.reward_list)
         self.reward_min = min(self.reward_list)
+        self.normalize = normalize
 
         # only finetune on the top 10% of data with highest reward
         threshold = np.percentile(self.reward_list, threshold*100)
@@ -45,7 +46,8 @@ class ImageRewardDataset(Dataset):
 
         reward = self.reward_data[now_image_name]
         # normalize reward to [0,1]
-        reward = (reward - self.reward_min) / (self.reward_max - self.reward_min)
+        if self.normalize:
+            reward = (reward - self.reward_min) / (self.reward_max - self.reward_min)
         reward = torch.tensor(reward)
 
         prompt = now_image_name.split("_")[-1].strip(".png")
