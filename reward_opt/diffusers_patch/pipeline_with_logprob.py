@@ -37,6 +37,8 @@ def pipeline_with_logprob(
     cross_attention_kwargs: Optional[Dict[str, Any]] = None,
     guidance_rescale: float = 0.0,
     compute_kl: bool = True,
+    reward_cond: float = None,
+    use_orig_unet: bool = False,
 ):
     r"""
     Function invoked when calling the pipeline for generation.
@@ -172,6 +174,9 @@ def pipeline_with_logprob(
     all_log_probs = []
     if compute_kl:
         mean_kl_div = torch.zeros(latents.shape[0], device=latents.device)
+
+    used_unet = self.unet if not use_orig_unet else self.unet_orig
+
     with self.progress_bar(total=num_inference_steps) as progress_bar:
         for i, t in enumerate(timesteps):
             # expand the latents if we are doing classifier free guidance
@@ -179,9 +184,10 @@ def pipeline_with_logprob(
             latent_model_input = self.scheduler.scale_model_input(latent_model_input, t)
 
             # predict the noise residual
-            noise_pred = self.unet(
+            noise_pred = used_unet(
                 latent_model_input,
                 t,
+                reward_cond,
                 encoder_hidden_states=prompt_embeds,
                 cross_attention_kwargs=cross_attention_kwargs,
                 return_dict=False,

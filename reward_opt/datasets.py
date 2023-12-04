@@ -161,3 +161,110 @@ def online_data_generation(pipeline, prompt_fn, reward_fn, config, accelerator, 
 
     accelerator.wait_for_everyone()
       
+def conditioned_online_data_generation(pipeline, prompt_fn, reward_fn, reward_range, config, accelerator, temp_image_folder, temp_reward_data_path):
+    if accelerator.is_local_main_process:
+        # remove the temp folder and temp reward data json file if exists
+        if os.path.exists(temp_image_folder):
+            shutil.rmtree(temp_image_folder)
+        if os.path.exists(temp_reward_data_path):
+            os.remove(temp_reward_data_path)
+
+        # re-create the new temp folder
+        os.makedirs(temp_image_folder)
+
+    accelerator.wait_for_everyone()
+
+    total_rounds = config.train.data_size // (config.sample.batch_size * accelerator.num_processes)
+
+    assert total_rounds >= 1
+    assert config.train.data_size % (config.sample.batch_size * accelerator.num_processes) == 0
+
+    neg_prompt_embed = pipeline.text_encoder(
+        pipeline.tokenizer(
+            [""],
+            return_tensors="pt",
+            padding="max_length",
+            truncation=True,
+            max_length=pipeline.tokenizer.model_max_length,
+        ).input_ids.to(accelerator.device)
+    )[0]
+    sample_neg_prompt_embeds = neg_prompt_embed.repeat(config.sample.batch_size, 1, 1)
+
+    img_score = {}
+    # start sampling
+    for rd in tqdm.trange(total_rounds, desc="generation round",
+            disable=not accelerator.is_local_main_process):
+        # generate prompts
+        prompts, prompt_metadata = zip(
+            *[prompt_fn() for _ in range(config.sample.batch_size)]
+        )
+
+        # encode prompts
+        prompt_ids = pipeline.tokenizer(
+            prompts,
+            return_tensors="pt",
+            padding="max_length",
+            truncation=True,
+            max_length=pipeline.tokenizer.model_max_length,
+        ).input_ids.to(accelerator.device)
+        prompt_embeds = pipeline.text_encoder(prompt_ids)[0]
+
+        # sample
+        if torch.rand(1) < config.train.exploration: # use original unet for generation
+            images, _, _, _ = pipeline_with_logprob(
+                pipeline,
+                prompt_embeds=prompt_embeds,
+                negative_prompt_embeds=sample_neg_prompt_embeds,
+                num_inference_steps=50,
+                guidance_scale=5,
+                eta=1,
+                output_type="pt",
+                compute_kl=False,
+                use_orig_unet=True
+            )
+        else: # use conditioned unet for generation
+            reward_cond = torch.rand(prompt_embeds.shape[0], 1).to(accelerator.device) * (reward_range[1] - reward_range[0]) + reward_range[0] # sample a random reward from the range
+            images, _, _, _ = pipeline_with_logprob(
+                pipeline,
+                prompt_embeds=prompt_embeds,
+                negative_prompt_embeds=sample_neg_prompt_embeds,
+                num_inference_steps=50,
+                guidance_scale=5,
+                eta=1,
+                output_type="pt",
+                compute_kl=False,
+                reward_cond=reward_cond
+            )
+
+        rewards, _ = reward_fn(images, prompts, prompt_metadata)
+        # save images with rewards and prompts in file name
+        for i, (image, prompt) in enumerate(zip(images, prompts)):
+            
+            img = f"{rd}-{accelerator.process_index}-{i}_{prompt}.png"
+            img_path = os.path.join(
+                    temp_image_folder,
+                    img,
+                )
+
+            image = image.cpu().numpy().transpose(1, 2, 0)
+            image = (image * 255).astype(np.uint8)
+            image = Image.fromarray(image)
+            image.save(img_path)
+            img_score[img] = rewards[i].item()
+
+    # save each img_score separately
+    with open(f"{accelerator.process_index}_{temp_reward_data_path}", "w") as f:
+        json.dump(img_score, f)
+    accelerator.wait_for_everyone()
+
+    # merge all the img_score json files
+    if accelerator.is_local_main_process:
+        img_score = {}
+        for i in range(accelerator.num_processes):
+            with open(f"{i}_{temp_reward_data_path}", "r") as f:
+                img_score.update(json.load(f))
+            os.remove(f"{i}_{temp_reward_data_path}")
+        with open(temp_reward_data_path, "w") as f:
+            json.dump(img_score, f)
+
+    accelerator.wait_for_everyone()

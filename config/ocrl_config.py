@@ -88,10 +88,12 @@ def base():
     # whether or not to use classifier-free guidance during training. if enabled, the same guidance scale used during
     # sampling will be used during training.
     train.cfg = True
-    train.temperatures = 0.2
     train.data_epoch = 5 # update the dataset every 5 epochs
-    train.data_size = 1280 # number of samples to use for each dataset
-    train.filter_threshold = 0.0 # the threshold to filter the samples
+    train.data_size = 2048 # number of samples to use for each dataset
+    train.exploration = 0.1 # the probability to sample from the pretrained model 
+    train.greedy = 0.1 # sample from the range of reward of top 10% samples
+    train.reward_scaler = 50
+    train.reward_offset = - 100
 
     ###### Prompt Function (only for evaluate) ######
     # prompt function to use. see `prompts.py` for available prompt functions.
@@ -111,6 +113,8 @@ def aesthetic():
     config = base()
     config.reward_fn = "aesthetic_score"
     config.prompt_fn = "simple_animals"
+    config.reward_offset = - 5
+    config.reward_scaler = 0.5
  
     return config
 

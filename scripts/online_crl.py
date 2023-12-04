@@ -15,7 +15,7 @@ from diffusers.models.attention_processor import LoRAAttnProcessor
 import numpy as np
 import reward_opt.prompts
 import reward_opt.rewards
-from reward_opt.datasets import ImageRewardDataset, online_data_generation
+from reward_opt.datasets import ImageRewardDataset, conditioned_online_data_generation
 from reward_opt.stat_tracking import PerPromptStatTracker
 from reward_opt.diffusers_patch.pipeline_with_logprob import pipeline_with_logprob
 from reward_opt.diffusers_patch.ddim_with_logprob import ddim_step_with_logprob
@@ -28,20 +28,21 @@ import tempfile
 from PIL import Image
 from copy import deepcopy
 from reward_opt.global_path import *
+import itertools
 
 tqdm = partial(tqdm.tqdm, dynamic_ncols=True)
 
 
 FLAGS = flags.FLAGS
-config_flags.DEFINE_config_file("config", "config/owrl_config.py", "Training configuration.")
+config_flags.DEFINE_config_file("config", "config/ocrl_config.py", "Training configuration.")
 
 logger = get_logger(__name__)
 
-### MODIFY THIS: Decide how to compute weights using reward, here is one choice
-def reward2weight(rewards, config):
+def reward_processor(rewards, config):
     # give 1 if reward > -70, otherwise give 0
-    temperatures = config.train.temperatures
-    weights = torch.exp((rewards - 1) / temperatures)
+    scaler = config.train.reward_scaler
+    offset = config.train.reward_offset
+    weights = torch.exp((rewards - offset) / scaler)
     return weights
 
 
@@ -84,7 +85,7 @@ def main(_):
     )
     if accelerator.is_main_process:
         accelerator.init_trackers(
-            project_name="reward_opt-pytorch", config=config.to_dict(), init_kwargs={"wandb": {"name": f"{config.run_name}_{config.prompt_fn}_{config.reward_fn}_{config.lora_rank}_{config.train.filter_threshold}"}}
+            project_name="reward_opt-pytorch", config=config.to_dict(), init_kwargs={"wandb": {"name": f"{config.run_name}_{config.prompt_fn}_{config.reward_fn}_{config.lora_rank}"}}
         )
     logger.info(f"\n{config}")
 
@@ -160,6 +161,18 @@ def main(_):
     else:
         unet = pipeline.unet
 
+    # set up reward embedding by using class embedding
+    reward_embedding = deepcopy(pipeline.unet.time_embedding)
+    for n, p in reward_embedding.named_parameters():
+        if "weight" in n:
+            torch.nn.init.xavier_uniform_(p)
+        elif "bias" in n:
+            torch.nn.init.zeros_(p)
+        else:
+            raise ValueError(f"Unknown parameter name {n}")
+    pipeline.unet.class_embedding = reward_embedding
+    pipeline.unet.class_embed_type = "timestep"
+
     # set up diffusers-friendly checkpoint saving with Accelerate
 
     def save_model_hook(models, weights, output_dir):
@@ -212,8 +225,10 @@ def main(_):
     else:
         optimizer_cls = torch.optim.AdamW
 
+    parameters_to_optimize = [reward_embedding.parameters(), unet.parameters()]
+
     optimizer = optimizer_cls(
-        unet.parameters(),
+        itertools.chain(*parameters_to_optimize),
         lr=config.train.learning_rate,
         betas=(config.train.adam_beta1, config.train.adam_beta2),
         weight_decay=config.train.adam_weight_decay,
@@ -294,6 +309,9 @@ def main(_):
     temp_image_folder= f"temp_image_folder_{time_id.item()}"
     temp_reward_data_path = f"temp_reward_data_{time_id.item()}.json"
 
+    max_processed_reward = -1
+    reward_range = [-1, -1]
+
     for epoch in range(first_epoch, config.num_epochs):
         #################### SAMPLING (only for evaluate) ####################
         pipeline.unet.eval()
@@ -320,6 +338,7 @@ def main(_):
             prompt_embeds = pipeline.text_encoder(prompt_ids)[0]
 
             # sample
+            max_reward_cond = torch.zeros(prompt_embeds.shape[0]).to(accelerator.device) + max_processed_reward # when doing evaluation, use current max reward as condition
             with autocast():
                 images, _, _, _, mean_kl_div = pipeline_with_logprob(
                     pipeline,
@@ -329,6 +348,7 @@ def main(_):
                     guidance_scale=config.sample.guidance_scale,
                     eta=config.sample.eta,
                     output_type="pt",
+                    reward_cond = max_reward_cond
                 )
 
             # compute rewards asynchronously
@@ -396,7 +416,7 @@ def main(_):
 
         #################### TRAINING ####################
         # function for computing weighted loss and do accumulated backward
-        def per_sample_loss(batch):
+        def per_sample_loss(batch, batch_reward):
             # Convert images to latent space
             batch_pixel_values = batch["pixel_values"].to(accelerator.device, dtype=inference_dtype)
             latents = pipeline.vae.encode(batch_pixel_values).latent_dist.sample()
@@ -425,13 +445,13 @@ def main(_):
             # Predict the noise residual and compute loss
             with autocast():
                 if config.train.cfg:
-                    model_pred = unet(torch.cat([noisy_latents]*2), torch.cat([timesteps]*2), embeds).sample
+                    model_pred = unet(torch.cat([noisy_latents]*2), torch.cat([timesteps]*2), batch_reward, embeds).sample
                     model_pred_uncond, model_pred_text = model_pred.chunk(2)
                     model_pred = model_pred_uncond + config.sample.guidance_scale * (
                         model_pred_text - model_pred_uncond
                     )
                 else:
-                    model_pred = unet(noisy_latents, timesteps, embeds).sample
+                    model_pred = unet(noisy_latents, timesteps, batch_reward, embeds).sample
 
             loss = F.mse_loss(model_pred.float(), noise.float(), reduction="none")
             sample_loss = loss.mean(dim=list(range(1, len(loss.shape)))) 
@@ -446,7 +466,7 @@ def main(_):
             logger.info(f"Total number of samples: {config.train.data_size}")
             logger.info(f"Number of GPUs: {accelerator.num_processes}")
 
-            online_data_generation(pipeline, prompt_fn, reward_fn, config, accelerator, temp_image_folder, temp_reward_data_path)
+            conditioned_online_data_generation(pipeline, prompt_fn, reward_fn, reward_range, config, accelerator, temp_image_folder, temp_reward_data_path)
 
             logger.info(f"online dataset updated at epoch {epoch} finished")
 
@@ -458,7 +478,16 @@ def main(_):
                                                                 num_workers=2,
                                                             )
             dataloader = accelerator.prepare(dataloader)
-            
+
+            # update reward range
+            reward_list = online_dataset.reward_list
+            reward_max = max(reward_list)
+            reward_top_greedy = np.quantile(reward_list, 1 - config.train.greedy)
+            reward_range = [reward_top_greedy, reward_max]
+            now_max_processed_reward = reward_processor(reward_max, config)
+            if now_max_processed_reward > max_processed_reward:
+                max_processed_reward = now_max_processed_reward
+                logger.info(f"max processed reward updated to {max_processed_reward}")
 
         # main training loop, execute num_steps_per_epoch * gradient_accumulation_steps times backpropogation
         data_iterable = iter(dataloader)
@@ -481,20 +510,21 @@ def main(_):
             batch_rewards = batch["rewards"].to(accelerator.device, dtype=torch.float32)
 
             # compute the weights
-            reward_weights = reward2weight(batch_rewards, config)
+            processed_reward = reward_processor(batch_rewards, config)
+            now_max_processed_reward = processed_reward.max()
+            if now_max_processed_reward > max_processed_reward:
+                max_processed_reward = now_max_processed_reward
+                logger.info(f"max processed reward updated to {max_processed_reward}")
 
             # backward pass for config.train.gradient_accumulation_steps times
             for now_acc_step in range(config.train.gradient_accumulation_steps):
                 now_sub_batch = {k: v[(now_acc_step * config.train.batch_size) : ((now_acc_step + 1) * config.train.batch_size)] for k, v in batch.items()}
-                now_sub_batch_weights = reward_weights[(now_acc_step * config.train.batch_size) : ((now_acc_step + 1) * config.train.batch_size)]
                 with accelerator.accumulate(unet):
                     # computing loss and do accumulated backward
-                    sample_loss = per_sample_loss(now_sub_batch)
+                    sample_loss = per_sample_loss(now_sub_batch, processed_reward)
 
                     #import ipdb; ipdb.set_trace()
-
-                    loss = (sample_loss * now_sub_batch_weights).sum() / total_train_batch_size
-                
+                    loss = sample_loss.sum() / total_train_batch_size
 
                     # backward pass
                     accelerator.backward(loss)
