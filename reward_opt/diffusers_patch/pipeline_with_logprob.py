@@ -187,7 +187,7 @@ def pipeline_with_logprob(
             noise_pred = used_unet(
                 latent_model_input,
                 t,
-                reward_cond,
+                class_labels = reward_cond,
                 encoder_hidden_states=prompt_embeds,
                 cross_attention_kwargs=cross_attention_kwargs,
                 return_dict=False,

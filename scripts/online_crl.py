@@ -445,13 +445,13 @@ def main(_):
             # Predict the noise residual and compute loss
             with autocast():
                 if config.train.cfg:
-                    model_pred = unet(torch.cat([noisy_latents]*2), torch.cat([timesteps]*2), batch_reward, embeds).sample
+                    model_pred = unet(torch.cat([noisy_latents]*2), torch.cat([timesteps]*2), embeds, class_labels = batch_reward).sample
                     model_pred_uncond, model_pred_text = model_pred.chunk(2)
                     model_pred = model_pred_uncond + config.sample.guidance_scale * (
                         model_pred_text - model_pred_uncond
                     )
                 else:
-                    model_pred = unet(noisy_latents, timesteps, batch_reward, embeds).sample
+                    model_pred = unet(noisy_latents, timesteps, embeds, class_labels = batch_reward).sample
 
             loss = F.mse_loss(model_pred.float(), noise.float(), reduction="none")
             sample_loss = loss.mean(dim=list(range(1, len(loss.shape)))) 
