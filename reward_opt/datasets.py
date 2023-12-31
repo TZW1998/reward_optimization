@@ -14,7 +14,7 @@ from reward_opt.diffusers_patch.pipeline_with_logprob import pipeline_with_logpr
 class ImageRewardDataset(Dataset):
     """dataset for (image, prompt, reward) triplets."""
 
-    def __init__(self, image_folder, reward_data_path, tokenizer, threshold=0.0, normalize = False):
+    def __init__(self, image_folder, reward_data_path, tokenizer, threshold=0.0, normalize = False, return_prompts = False):
         self.image_folder= image_folder
       
         with open(reward_data_path, "r") as f:
@@ -36,6 +36,7 @@ class ImageRewardDataset(Dataset):
         threshold = np.percentile(self.reward_list, threshold*100)
         self.filtered_images_name_list = [img for img in self.images_name_list if self.reward_data[img] >= threshold]
 
+        self.return_prompts = return_prompts
 
     def __len__(self):
         return len(self.filtered_images_name_list)
@@ -55,6 +56,7 @@ class ImageRewardDataset(Dataset):
         if not image.mode == "RGB":
             image = image.convert("RGB")
         image = self.image_transforms(image)
+
         input_id = self.tokenizer(
             prompt,
             return_tensors="pt",
@@ -63,7 +65,10 @@ class ImageRewardDataset(Dataset):
             max_length=self.tokenizer.model_max_length,
         ).input_ids
 
-        sample = {"pixel_values": image, "input_ids": input_id, "rewards": reward}
+        if self.return_prompts:
+            sample = {"pixel_values": image, "prompts": prompt, "rewards": reward}
+        else:
+            sample = {"pixel_values": image, "input_ids": input_id, "rewards": reward}
 
         return sample
 
@@ -161,7 +166,7 @@ def online_data_generation(pipeline, prompt_fn, reward_fn, config, accelerator, 
 
     accelerator.wait_for_everyone()
       
-def conditioned_online_data_generation(pipeline, prompt_fn, reward_fn, reward_range, config, accelerator, temp_image_folder, temp_reward_data_path):
+def conditioned_online_data_generation(pipeline, prompt_fn, reward_fn, reward_range, use_orig_unet, config, accelerator, temp_image_folder, temp_reward_data_path):
     if accelerator.is_local_main_process:
         # remove the temp folder and temp reward data json file if exists
         if os.path.exists(temp_image_folder):
@@ -210,7 +215,7 @@ def conditioned_online_data_generation(pipeline, prompt_fn, reward_fn, reward_ra
         prompt_embeds = pipeline.text_encoder(prompt_ids)[0]
 
         # sample
-        if torch.rand(1) < config.train.exploration: # use original unet for generation
+        if (torch.rand(1) < config.train.exploration) or (use_orig_unet): # use original unet for generation
             images, _, _, _ = pipeline_with_logprob(
                 pipeline,
                 prompt_embeds=prompt_embeds,
@@ -222,8 +227,9 @@ def conditioned_online_data_generation(pipeline, prompt_fn, reward_fn, reward_ra
                 compute_kl=False,
                 use_orig_unet=True
             )
+            #print("use original unet for generation")
         else: # use conditioned unet for generation
-            reward_cond = torch.rand(prompt_embeds.shape[0], 1).to(accelerator.device) * (reward_range[1] - reward_range[0]) + reward_range[0] # sample a random reward from the range
+            reward_cond = torch.rand(prompt_embeds.shape[0]).to(accelerator.device) * (reward_range[1] - reward_range[0]) + reward_range[0] # sample a random reward from the range
             images, _, _, _ = pipeline_with_logprob(
                 pipeline,
                 prompt_embeds=prompt_embeds,
@@ -233,8 +239,10 @@ def conditioned_online_data_generation(pipeline, prompt_fn, reward_fn, reward_ra
                 eta=1,
                 output_type="pt",
                 compute_kl=False,
-                reward_cond=reward_cond
+                reward_cond=reward_cond,
+                use_orig_unet=False
             )
+            #print("use new unet for generation")
 
         rewards, _ = reward_fn(images, prompts, prompt_metadata)
         # save images with rewards and prompts in file name

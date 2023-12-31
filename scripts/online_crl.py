@@ -19,6 +19,7 @@ from reward_opt.datasets import ImageRewardDataset, conditioned_online_data_gene
 from reward_opt.stat_tracking import PerPromptStatTracker
 from reward_opt.diffusers_patch.pipeline_with_logprob import pipeline_with_logprob
 from reward_opt.diffusers_patch.ddim_with_logprob import ddim_step_with_logprob
+
 import torch
 import torch.nn.functional as F
 import wandb
@@ -128,8 +129,7 @@ def main(_):
     if config.use_lora:
         pipeline.unet.to(accelerator.device, dtype=inference_dtype)
 
-    # clone the original unet so that we can compute the kl loss
-    pipeline.unet_orig = deepcopy(pipeline.unet)
+
 
     if config.use_lora:
         # Set correct lora layers
@@ -161,17 +161,11 @@ def main(_):
     else:
         unet = pipeline.unet
 
+    # clone the original unet so that we can compute the kl loss
+    pipeline.unet_orig = deepcopy(pipeline.unet)
+
     # set up reward embedding by using class embedding
-    reward_embedding = deepcopy(pipeline.unet.time_embedding)
-    for n, p in reward_embedding.named_parameters():
-        if "weight" in n:
-            torch.nn.init.xavier_uniform_(p)
-        elif "bias" in n:
-            torch.nn.init.zeros_(p)
-        else:
-            raise ValueError(f"Unknown parameter name {n}")
-    pipeline.unet.class_embedding = reward_embedding
-    pipeline.unet.class_embed_type = "timestep"
+    pipeline.unet.class_embedding = lambda x: torch.zeros(len(x), 1280, device = x.device, dtype = x.dtype) + x.reshape(-1,1)
 
     # set up diffusers-friendly checkpoint saving with Accelerate
 
@@ -225,10 +219,8 @@ def main(_):
     else:
         optimizer_cls = torch.optim.AdamW
 
-    parameters_to_optimize = [reward_embedding.parameters(), unet.parameters()]
-
     optimizer = optimizer_cls(
-        itertools.chain(*parameters_to_optimize),
+        unet.parameters(),
         lr=config.train.learning_rate,
         betas=(config.train.adam_beta1, config.train.adam_beta2),
         weight_decay=config.train.adam_weight_decay,
@@ -309,8 +301,8 @@ def main(_):
     temp_image_folder= f"temp_image_folder_{time_id.item()}"
     temp_reward_data_path = f"temp_reward_data_{time_id.item()}.json"
 
-    max_processed_reward = -1
-    reward_range = [-1, -1]
+    processed_reward_max = 0
+    processed_reward_range = [0, 0]
 
     for epoch in range(first_epoch, config.num_epochs):
         #################### SAMPLING (only for evaluate) ####################
@@ -338,7 +330,9 @@ def main(_):
             prompt_embeds = pipeline.text_encoder(prompt_ids)[0]
 
             # sample
-            max_reward_cond = torch.zeros(prompt_embeds.shape[0]).to(accelerator.device) + max_processed_reward # when doing evaluation, use current max reward as condition
+            #max_reward_cond = torch.zeros(prompt_embeds.shape[0]).to(accelerator.device) + processed_reward_max  # when doing evaluation, use current max reward as condition
+            max_reward_cond = torch.rand(prompt_embeds.shape[0]).to(accelerator.device) * (processed_reward_range[1] - processed_reward_range[0]) + processed_reward_range[0]
+            
             with autocast():
                 images, _, _, _, mean_kl_div = pipeline_with_logprob(
                     pipeline,
@@ -416,9 +410,10 @@ def main(_):
 
         #################### TRAINING ####################
         # function for computing weighted loss and do accumulated backward
-        def per_sample_loss(batch, batch_reward):
+        def per_sample_loss(batch, processed_reward):
             # Convert images to latent space
             batch_pixel_values = batch["pixel_values"].to(accelerator.device, dtype=inference_dtype)
+            batch_reward = processed_reward.to(accelerator.device, dtype=inference_dtype)
             latents = pipeline.vae.encode(batch_pixel_values).latent_dist.sample()
             latents = latents * pipeline.vae.config.scaling_factor
 
@@ -445,7 +440,16 @@ def main(_):
             # Predict the noise residual and compute loss
             with autocast():
                 if config.train.cfg:
-                    model_pred = unet(torch.cat([noisy_latents]*2), torch.cat([timesteps]*2), embeds, class_labels = batch_reward).sample
+                    
+
+                    # with torch.no_grad():
+                    #     base_reward = torch.zeros_like(batch_reward)
+                    #     model_pred_base = unet(torch.cat([noisy_latents]*2), torch.cat([timesteps]*2), embeds, class_labels = torch.cat([base_reward]*2)).sample
+
+                    model_pred = unet(torch.cat([noisy_latents]*2), torch.cat([timesteps]*2), embeds, class_labels = torch.cat([batch_reward]*2)).sample
+                    
+                    # if accelerator.is_main_process:
+                    #     print("pass reward:", batch_reward, torch.norm(model_pred - model_pred_base).item())
                     model_pred_uncond, model_pred_text = model_pred.chunk(2)
                     model_pred = model_pred_uncond + config.sample.guidance_scale * (
                         model_pred_text - model_pred_uncond
@@ -466,7 +470,8 @@ def main(_):
             logger.info(f"Total number of samples: {config.train.data_size}")
             logger.info(f"Number of GPUs: {accelerator.num_processes}")
 
-            conditioned_online_data_generation(pipeline, prompt_fn, reward_fn, reward_range, config, accelerator, temp_image_folder, temp_reward_data_path)
+            use_orig_unet = (epoch == 0)
+            conditioned_online_data_generation(pipeline, prompt_fn, reward_fn, processed_reward_range, use_orig_unet, config, accelerator, temp_image_folder, temp_reward_data_path)
 
             logger.info(f"online dataset updated at epoch {epoch} finished")
 
@@ -483,11 +488,14 @@ def main(_):
             reward_list = online_dataset.reward_list
             reward_max = max(reward_list)
             reward_top_greedy = np.quantile(reward_list, 1 - config.train.greedy)
-            reward_range = [reward_top_greedy, reward_max]
-            now_max_processed_reward = reward_processor(reward_max, config)
-            if now_max_processed_reward > max_processed_reward:
-                max_processed_reward = now_max_processed_reward
-                logger.info(f"max processed reward updated to {max_processed_reward}")
+            processed_reward_top_greedy = reward_processor(torch.tensor(reward_top_greedy), config).item()
+            processed_reward_max = reward_processor(torch.tensor(reward_max), config).item()
+            processed_reward_range = [processed_reward_top_greedy, processed_reward_max]
+            logger.info(f"max processed reward updated to {processed_reward_max} ({reward_max})")
+            logger.info(f"max processed reward range updated to {processed_reward_range[0]}-{processed_reward_range[1]} ({reward_top_greedy})")
+            processed_quantile = reward_processor(torch.tensor(reward_list), config).numpy()
+            processed_quantile = np.quantile(processed_quantile, use_quantiles)
+            logger.info(f"quantile {processed_quantile}")
 
         # main training loop, execute num_steps_per_epoch * gradient_accumulation_steps times backpropogation
         data_iterable = iter(dataloader)
@@ -511,17 +519,15 @@ def main(_):
 
             # compute the weights
             processed_reward = reward_processor(batch_rewards, config)
-            now_max_processed_reward = processed_reward.max()
-            if now_max_processed_reward > max_processed_reward:
-                max_processed_reward = now_max_processed_reward
-                logger.info(f"max processed reward updated to {max_processed_reward}")
+
 
             # backward pass for config.train.gradient_accumulation_steps times
             for now_acc_step in range(config.train.gradient_accumulation_steps):
                 now_sub_batch = {k: v[(now_acc_step * config.train.batch_size) : ((now_acc_step + 1) * config.train.batch_size)] for k, v in batch.items()}
+                now_sub_batch_reward = processed_reward[(now_acc_step * config.train.batch_size) : ((now_acc_step + 1) * config.train.batch_size)]
                 with accelerator.accumulate(unet):
                     # computing loss and do accumulated backward
-                    sample_loss = per_sample_loss(now_sub_batch, processed_reward)
+                    sample_loss = per_sample_loss(now_sub_batch, now_sub_batch_reward)
 
                     #import ipdb; ipdb.set_trace()
                     loss = sample_loss.sum() / total_train_batch_size
@@ -531,6 +537,7 @@ def main(_):
 
                     # Checks if the accelerator has performed an optimization step behind the scenes
                     if accelerator.sync_gradients:
+                 
                         accelerator.clip_grad_norm_(unet.parameters(), config.train.max_grad_norm)
                     optimizer.step()
                     optimizer.zero_grad()

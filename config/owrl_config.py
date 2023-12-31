@@ -63,13 +63,13 @@ def base():
     config.train = train = ml_collections.ConfigDict()
     # should tune num_steps_per_epoch, batch_size, gradient_accumulation_steps so that each epoch consume roungly the same with ddpo.
     # number of gradient steps per epoch. This means that at each epoch, it will load num_steps * batch_size * num_gpu * gradient_accumulation_steps samples
-    train.num_steps_per_epoch = 85 
+    train.num_steps_per_epoch = 50 
     # batch size (per GPU!) to use for training.
     train.batch_size = 1
     # whether to use the 8bit Adam optimizer from bitsandbytes.
     train.use_8bit_adam = False
     # learning rate.
-    train.learning_rate = 1e-4
+    train.learning_rate = 1e-5
     # Adam beta1.
     train.adam_beta1 = 0.9
     # Adam beta2.
@@ -88,11 +88,11 @@ def base():
     # whether or not to use classifier-free guidance during training. if enabled, the same guidance scale used during
     # sampling will be used during training.
     train.cfg = True
-    train.temperatures = 50
+    train.temperatures = 10
     train.reward_offset = - 100
     train.data_epoch = 5 # update the dataset every 5 epochs
     train.data_size = 2048 # number of samples to use for each dataset
-    train.filter_threshold = 0.0 # the threshold to filter the samples
+    train.filter_threshold = 0.9 # the threshold to filter the samples
 
     ###### Prompt Function (only for evaluate) ######
     # prompt function to use. see `prompts.py` for available prompt functions.
@@ -112,8 +112,8 @@ def aesthetic():
     config = base()
     config.reward_fn = "aesthetic_score"
     config.prompt_fn = "simple_animals"
-    config.reward_offset = - 5
-    config.temperatures = 0.5
+    config.train.reward_offset = 0
+    config.train.temperatures = 100000
  
     return config
 

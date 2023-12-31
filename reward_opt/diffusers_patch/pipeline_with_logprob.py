@@ -177,17 +177,24 @@ def pipeline_with_logprob(
 
     used_unet = self.unet if not use_orig_unet else self.unet_orig
 
+    if (use_orig_unet) or (reward_cond is None):
+        assert reward_cond is None
+        reward_cond_input = None
+    else:
+        reward_cond_input = torch.cat([reward_cond] * 2) if do_classifier_free_guidance else reward_cond
+
     with self.progress_bar(total=num_inference_steps) as progress_bar:
         for i, t in enumerate(timesteps):
             # expand the latents if we are doing classifier free guidance
-            latent_model_input = torch.cat([latents] * 2) if do_classifier_free_guidance else latents
+            latent_model_input = torch.cat([latents] * 2) 
             latent_model_input = self.scheduler.scale_model_input(latent_model_input, t)
+             
 
             # predict the noise residual
             noise_pred = used_unet(
                 latent_model_input,
                 t,
-                class_labels = reward_cond,
+                class_labels = reward_cond_input,
                 encoder_hidden_states=prompt_embeds,
                 cross_attention_kwargs=cross_attention_kwargs,
                 return_dict=False,

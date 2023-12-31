@@ -459,6 +459,11 @@ def main(_):
                                                                 num_workers=2,
                                                             )
             dataloader = accelerator.prepare(dataloader)
+
+            reward_list = online_dataset.reward_list
+            processed_quantile = reward2weight(torch.tensor(reward_list), config).numpy()
+            processed_quantile = np.quantile(processed_quantile, use_quantiles)
+            logger.info(f"quantile {processed_quantile}")
             
 
         # main training loop, execute num_steps_per_epoch * gradient_accumulation_steps times backpropogation

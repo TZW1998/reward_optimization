@@ -9,7 +9,7 @@ def base():
 
     ###### General ######
     # run name for wandb logging and checkpoint saving -- if not provided, will be auto-generated based on the datetime.
-    config.run_name = "online_wrl"
+    config.run_name = "online_crl"
     # random seed for reproducibility.
     config.seed = 42
     # top-level logging directory for checkpoint saving.
@@ -34,7 +34,7 @@ def base():
     # about 10GB of GPU memory. beware that if LoRA is disabled, training will take a lot of memory and saved checkpoint
     # files will also be large.
     config.use_lora = True
-    config.lora_rank = 1
+    config.lora_rank = 4
 
     ###### Pretrained Model ######
     config.pretrained = pretrained = ml_collections.ConfigDict()
@@ -63,13 +63,13 @@ def base():
     config.train = train = ml_collections.ConfigDict()
     # should tune num_steps_per_epoch, batch_size, gradient_accumulation_steps so that each epoch consume roungly the same with ddpo.
     # number of gradient steps per epoch. This means that at each epoch, it will load num_steps * batch_size * num_gpu * gradient_accumulation_steps samples
-    train.num_steps_per_epoch = 85 
+    train.num_steps_per_epoch = 5
     # batch size (per GPU!) to use for training.
     train.batch_size = 1
     # whether to use the 8bit Adam optimizer from bitsandbytes.
     train.use_8bit_adam = False
     # learning rate.
-    train.learning_rate = 1e-4
+    train.learning_rate = 3e-4
     # Adam beta1.
     train.adam_beta1 = 0.9
     # Adam beta2.
@@ -80,7 +80,7 @@ def base():
     train.adam_epsilon = 1e-8
     # number of gradient accumulation steps. the effective batch size is `batch_size * num_gpus *
     # gradient_accumulation_steps`.
-    train.gradient_accumulation_steps = 16
+    train.gradient_accumulation_steps = 128
     # maximum gradient norm for gradient clipping.
     train.max_grad_norm = 1.0
     # number of inner epochs per outer epoch. each inner epoch is one iteration through the current subset of offline datasets
@@ -89,11 +89,12 @@ def base():
     # sampling will be used during training.
     train.cfg = True
     train.data_epoch = 5 # update the dataset every 5 epochs
-    train.data_size = 2048 # number of samples to use for each dataset
-    train.exploration = 0.1 # the probability to sample from the pretrained model 
+    train.data_size = 1024 # number of samples to use for each dataset
+    train.exploration = 0.2 # the probability to sample from the pretrained model 
     train.greedy = 0.1 # sample from the range of reward of top 10% samples
-    train.reward_scaler = 50
-    train.reward_offset = - 100
+    train.reward_scaler = 30
+    train.reward_offset = 0
+    train.filter_threshold = 0.9
 
     ###### Prompt Function (only for evaluate) ######
     # prompt function to use. see `prompts.py` for available prompt functions.
